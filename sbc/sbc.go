@@ -75,14 +75,26 @@ func (s *sbc) Run() {
 	// create new database and schema if --fresh flag is set
 	if viper.GetBool("fresh") {
 		if err := s.db.CreateFreshDB(); err != nil {
+			s.logger.Error("Could not create fresh DB", "err", err)
 			os.Exit(1)
 		}
 	}
 
 	// save sbc configuration information
-	if err := s.db.SaveSBCInformation(); err != nil {
+	sbcId, err := s.db.SaveSBCInformation()
+	if err != nil {
+		s.logger.Error("Could not save SBC information", "err", err)
 		os.Exit(1)
 	}
+
+	// get data from database
+	sbcInfo, err := s.db.GetSBCParameters(sbcId)
+	if err != nil {
+		s.logger.Error("Could not get SBC parameters", "err", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("%#v\n", sbcInfo)
 
 	// create and run containers
 	s.createAndRunContainers()

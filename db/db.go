@@ -12,7 +12,8 @@ import (
 
 type IDB interface {
 	CreateFreshDB() error
-	SaveSBCInformation() error
+	SaveSBCInformation() (int64, error)
+	GetSBCParameters(sbcId int64) (Sbc, error)
 }
 
 var (
@@ -30,7 +31,7 @@ type db struct {
 }
 
 type insertID struct {
-	kamailio, rtpEngine int64
+	kamailio, rtpEngine, sbcInstance int64
 }
 
 func NewDB(logger hclog.Logger) IDB {
@@ -124,12 +125,13 @@ create table sbc_info
 	return nil
 }
 
-func (d *db) SaveSBCInformation() error {
+func (d *db) SaveSBCInformation() (int64, error) {
 	var err error
 
 	// check if required flags are present
 	if err := checkForRequiredFlags(); err != nil {
-		return err
+		d.log.Error("Required flags check failed", "err", err)
+		return -1, err
 	}
 
 	// open db connection
@@ -137,31 +139,31 @@ func (d *db) SaveSBCInformation() error {
 	if err != nil {
 		d.log.Error("Could not open db connection", "data_source", d.dataSource, "err", err)
 
-		return err
+		return -1, err
 	}
 
 	// store kamailio config and save insert id
 	if err = d.storeKamailioData(); err != nil {
 		d.log.Error("Could not store kamailio data", "err", err)
 
-		return err
+		return -1, err
 	}
 
 	// store rtp engine config and save insert id
 	if err = d.storeRtpEngineData(); err != nil {
 		d.log.Error("Could not store rtp engine data", "err", err)
 
-		return err
+		return -1, err
 	}
 
 	// store sbc info using the kamailio and rtp engine ids
 	if err = d.storeSbcInfo(); err != nil {
 		d.log.Error("Could not store sbc configuration information")
 
-		return err
+		return -1, err
 	}
 
-	return nil
+	return d.insertID.sbcInstance, nil
 }
 
 func (d *db) storeSbcInfo() error {
@@ -171,7 +173,7 @@ func (d *db) storeSbcInfo() error {
 		return fmt.Errorf("could not prepare insert statement err=%w", err)
 	}
 
-	_, err = stmt.Exec(
+	res, err := stmt.Exec(
 		viper.GetString("sbc-fqdn"),
 		d.insertID.kamailio,
 		d.insertID.rtpEngine,
@@ -182,7 +184,59 @@ func (d *db) storeSbcInfo() error {
 
 	d.log.Info("Sbc configuration information successfully saved")
 
+	d.insertID.sbcInstance, err = res.LastInsertId()
+	if err != nil {
+		return fmt.Errorf("could not get last insert id from insert into sbc_info err=%w", err)
+	}
+
+	d.log.Debug("SBC configuration inserted", "insert_id", d.insertID.sbcInstance)
+
 	return nil
+}
+
+func (d *db) GetSBCParameters(sbcId int64) (Sbc, error) {
+	stmt, err := d.db.Prepare(
+		"SELECT " +
+			"fqdn, sbc_name, sbc_tls_port, sbc_udp_port, " +
+			"pbx_ip, pbx_port, rtp_engine_port, rtp_max, " +
+			"rtp_min, media_public_ip, ng_listen " +
+			"FROM sbc_info " +
+			"JOIN kamailio k ON k.id = sbc_info.kamailio_id " +
+			"JOIN rtp_engine re ON re.id = sbc_info.rtp_engine_id " +
+			"WHERE sbc_info.id == ?")
+	if err != nil {
+		return Sbc{}, fmt.Errorf("could not prepare select statement err=%w", err)
+	}
+
+	res, err := stmt.Query(sbcId)
+	if err != nil {
+		return Sbc{}, fmt.Errorf("could not run query for select statement err=%w", err)
+	}
+
+	sbcResult := Sbc{}
+
+	for res.Next() {
+		if err := res.Scan(
+			&sbcResult.Fqdn,
+			&sbcResult.SbcName,
+			&sbcResult.SbcTLSPort,
+			&sbcResult.SbcUDPPort,
+			&sbcResult.PbxIP,
+			&sbcResult.PbxPort,
+			&sbcResult.RtpEnginePort,
+			&sbcResult.RtpMaxPort,
+			&sbcResult.RtpMinPort,
+			&sbcResult.MediaPublicIP,
+			&sbcResult.NgListen,
+		); err != nil {
+			return Sbc{}, fmt.Errorf("could not scan data into struct err=%w", err)
+		}
+
+	}
+
+	d.log.Debug("Data fetched from database", "data", sbcResult)
+
+	return sbcResult, nil
 }
 
 func (d *db) storeRtpEngineData() error {
