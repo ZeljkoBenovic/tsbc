@@ -12,9 +12,8 @@ import (
 )
 
 type Config struct {
-	DomainName, Port               string
-	LogLevel                       string
-	KamailioImage, RTPEngieneImage string
+	DomainName, Port string
+	LogLevel         string
 }
 
 type ISBC interface {
@@ -27,6 +26,7 @@ type sbc struct {
 	dockerCl *client.Client
 	logger   hclog.Logger
 	db       db.IDB
+	sbcData  db.Sbc
 }
 
 func NewSBC(sbcConfig Config) (ISBC, error) {
@@ -72,6 +72,7 @@ func (s *sbc) Run() {
 	// close connections after this function finishes
 	defer s.close()
 
+	// TODO: instead of --fresh, check if the database and data exists and act accordingly
 	// create new database and schema if --fresh flag is set
 	if viper.GetBool("fresh") {
 		if err := s.db.CreateFreshDB(); err != nil {
@@ -88,14 +89,18 @@ func (s *sbc) Run() {
 	}
 
 	// get data from database
-	sbcInfo, err := s.db.GetSBCParameters(sbcId)
+	s.sbcData, err = s.db.GetSBCParameters(sbcId)
 	if err != nil {
 		s.logger.Error("Could not get SBC parameters", "err", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("%#v\n", sbcInfo)
+	// TODO: implement and handle Lets Encrypt container
 
-	// create and run containers
-	s.createAndRunContainers()
+	// create and run containers infrastructure
+	if err = s.createAndRunSbcInfra(); err != nil {
+		s.logger.Error("Could not create SBC infrastructure", "err", err)
+		// TODO: add database revert if deployment fails
+		os.Exit(1)
+	}
 }

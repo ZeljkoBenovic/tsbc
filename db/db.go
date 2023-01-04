@@ -199,7 +199,7 @@ func (d *db) GetSBCParameters(sbcId int64) (Sbc, error) {
 		"SELECT " +
 			"fqdn, sbc_name, sbc_tls_port, sbc_udp_port, " +
 			"pbx_ip, pbx_port, rtp_engine_port, rtp_max, " +
-			"rtp_min, media_public_ip, ng_listen " +
+			"rtp_min, media_public_ip, ng_listen, new_config, enable_sipdump " +
 			"FROM sbc_info " +
 			"JOIN kamailio k ON k.id = sbc_info.kamailio_id " +
 			"JOIN rtp_engine re ON re.id = sbc_info.rtp_engine_id " +
@@ -228,6 +228,8 @@ func (d *db) GetSBCParameters(sbcId int64) (Sbc, error) {
 			&sbcResult.RtpMinPort,
 			&sbcResult.MediaPublicIP,
 			&sbcResult.NgListen,
+			&sbcResult.NewConfig,
+			&sbcResult.EnableSipDump,
 		); err != nil {
 			return Sbc{}, fmt.Errorf("could not scan data into struct err=%w", err)
 		}

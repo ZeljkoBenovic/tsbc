@@ -23,7 +23,7 @@ to quickly create a Cobra application.`,
 }
 
 func Initialize(rootCmd *cobra.Command) {
-	// TODO: add flags and viper config
+	// TODO: create const for flag names
 	// general flags
 	runCmd.Flags().Bool("fresh", false, "create new database and schema")
 	runCmd.Flags().String("sbc-fqdn", "", "fqdn that Kamailio will advertise")
@@ -35,11 +35,13 @@ func Initialize(rootCmd *cobra.Command) {
 	runCmd.Flags().String("kamailio-pbx-ip", "", "ip address of internal PBX")
 	runCmd.Flags().String("kamailio-pbx-port", "5060", "sip port of internal PBX")
 	runCmd.Flags().String("kamailio-rtpeng-port", "20001", "rtp engine signalisation port")
+	runCmd.Flags().String("kamailio-image", "zeljkoiphouse/kamailio:latest", "kamailio docker image name")
 	// rtp engine flags
 	runCmd.Flags().String("rtp-min-port", "20501", "start port for RTP")
 	runCmd.Flags().String("rtp-max-port", "21000", "end port for RTP")
 	runCmd.Flags().String("rtp-public-ip", "", "public ip for RTP transport")
 	runCmd.Flags().String("rtp-signal-port", "20001", "port used to communicate with Kamailio")
+	runCmd.Flags().String("rtp-image", "zeljkoiphouse/rtpengine:latest", "rtp engine docker image name")
 
 	_ = runCmd.MarkFlagRequired("sbc-fqdn")
 	_ = runCmd.MarkFlagRequired("rtp-public-ip")
@@ -57,10 +59,8 @@ func runCommandHandler(cmd *cobra.Command, args []string) {
 	// TODO: process config and pass it to the sbc instance
 	// create new sbc instance and pass parameters
 	sbcInstance, err := sbc.NewSBC(sbc.Config{
-		DomainName:    "sbc.testing.com",
-		Port:          "5060",
-		LogLevel:      "debug",
-		KamailioImage: "docker.io/library/alpine",
+		// TODO: handle log level via flags
+		LogLevel: "debug",
 	})
 	if err != nil {
 		log.Fatalln("Could not create sbc instance err=", err.Error())

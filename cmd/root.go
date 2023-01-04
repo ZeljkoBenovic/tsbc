@@ -31,5 +31,6 @@ func Execute() {
 }
 
 func init() {
+	// TODO: add restart and destroy commands
 	run.Initialize(rootCmd)
 }
