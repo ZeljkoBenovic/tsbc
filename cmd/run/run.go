@@ -25,7 +25,6 @@ to quickly create a Cobra application.`,
 
 func Initialize(rootCmd *cobra.Command) {
 	// general flags
-	runCmd.Flags().Bool("fresh", false, "create new database and schema")
 	runCmd.Flags().String(flagnames.SbcFqdn, "", "fqdn that Kamailio will advertise")
 	// kamailio flags
 	runCmd.Flags().Bool(flagnames.KamailioNewConfig, true, "generate new config file for Kamailio")

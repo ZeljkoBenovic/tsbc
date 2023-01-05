@@ -15,6 +15,7 @@ type IDB interface {
 	CreateFreshDB() error
 	SaveSBCInformation() (int64, error)
 	GetSBCParameters(sbcId int64) (Sbc, error)
+	Close() error
 }
 
 var (
@@ -24,9 +25,8 @@ var (
 )
 
 type db struct {
-	dataSource string
-	db         *sql.DB
-	log        hclog.Logger
+	db  *sql.DB
+	log hclog.Logger
 
 	insertID
 }
@@ -35,15 +35,49 @@ type insertID struct {
 	kamailio, rtpEngine, sbcInstance int64
 }
 
-func NewDB(logger hclog.Logger) IDB {
-	return &db{
-		dataSource: "sbc.db",
-		log:        logger.Named("db"),
+func NewDB(logger hclog.Logger) (IDB, error) {
+	var err error
+	dbInstance := &db{
+		log: logger.Named("db"),
 	}
+
+	dbInstance.log.Debug("Creating new SQLite instance")
+
+	dbInstance.db, err = sql.Open("sqlite3", "sbc.db")
+	if err != nil {
+		dbInstance.log.Error("Could not open db connection", "data_source", "sbc.db", "err", err)
+
+		return nil, err
+	}
+
+	dbInstance.log.Debug("SQLite instance created")
+
+	return dbInstance, nil
+}
+
+func (d *db) Close() error {
+	if err := d.db.Close(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (d *db) CreateFreshDB() error {
 	var err error
+
+	// check if there is data in the table already
+	tableExists, err := d.checkIfTableExists("sbc_info")
+	if err != nil {
+		return fmt.Errorf("error while checking if table already exists err=%w", err)
+	}
+
+	if tableExists {
+		d.log.Debug("Table already exists, skipping new schema generation", "table", "sbc_info")
+
+		// return nil as this is not an error, and we want the rest of the program to continue
+		return nil
+	}
 
 	// TODO: set appropriate types
 	schema := `create table kamailio
@@ -99,17 +133,6 @@ create table sbc_info
         references rtp_engine
 );`
 
-	d.log.Debug("Creating new SQLite instance")
-
-	d.db, err = sql.Open("sqlite3", d.dataSource)
-	if err != nil {
-		d.log.Error("Could not open db connection", "data_source", d.dataSource, "err", err)
-
-		return err
-	}
-
-	d.log.Debug("SQLite instance created")
-
 	d.log.Debug("Creating new db schema")
 
 	_, err = d.db.Exec(schema)
@@ -121,8 +144,6 @@ create table sbc_info
 
 	d.log.Debug("New db schema created")
 
-	_ = d.db.Close()
-
 	return nil
 }
 
@@ -132,14 +153,6 @@ func (d *db) SaveSBCInformation() (int64, error) {
 	// check if required flags are present
 	if err := checkForRequiredFlags(); err != nil {
 		d.log.Error("Required flags check failed", "err", err)
-		return -1, err
-	}
-
-	// open db connection
-	d.db, err = sql.Open("sqlite3", d.dataSource)
-	if err != nil {
-		d.log.Error("Could not open db connection", "data_source", d.dataSource, "err", err)
-
 		return -1, err
 	}
 
@@ -373,6 +386,26 @@ func (d *db) storeKamailioData() error {
 	d.log.Debug("Kamailio configuration inserted", "insert_id", d.insertID.kamailio)
 
 	return nil
+}
+
+func (d *db) checkIfTableExists(tableName string) (bool, error) {
+	stmt, err := d.db.Prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?")
+	if err != nil {
+		return false, fmt.Errorf("could not prepare statement err=%w", err)
+	}
+
+	res, err := stmt.Query(tableName)
+	if err != nil {
+		return false, fmt.Errorf("could not run query err=%w", err)
+	}
+
+	defer res.Close()
+
+	if res.Next() {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func checkForRequiredFlags() error {

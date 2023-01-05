@@ -8,7 +8,6 @@ import (
 	"github.com/ZeljkoBenovic/tsbc/db"
 	"github.com/docker/docker/client"
 	"github.com/hashicorp/go-hclog"
-	"github.com/spf13/viper"
 )
 
 type Config struct {
@@ -51,20 +50,31 @@ func NewSBC(sbcConfig Config) (ISBC, error) {
 
 	lg.Debug("New docker client instance created")
 
+	// get new database instance
+	dbInst, err := db.NewDB(lg)
+	if err != nil {
+		lg.Error("Could not instantiate new database instance", "err", err)
+
+		return nil, err
+	}
+
 	// return sbc instance
 	return &sbc{
 		config:   sbcConfig,
 		ctx:      context.Background(),
 		logger:   lg,
 		dockerCl: dCl,
-		db:       db.NewDB(lg),
+		db:       dbInst,
 	}, nil
 }
 
 func (s *sbc) close() {
-	err := s.dockerCl.Close()
-	if err != nil {
+	if err := s.dockerCl.Close(); err != nil {
 		s.logger.Error("Could not close docker client", "err", err)
+	}
+
+	if err := s.db.Close(); err != nil {
+		s.logger.Error("Could not close database client", "err", err)
 	}
 }
 
@@ -72,13 +82,9 @@ func (s *sbc) Run() {
 	// close connections after this function finishes
 	defer s.close()
 
-	// TODO: instead of --fresh, check if the database and data exists and act accordingly
-	// create new database and schema if --fresh flag is set
-	if viper.GetBool("fresh") {
-		if err := s.db.CreateFreshDB(); err != nil {
-			s.logger.Error("Could not create fresh DB", "err", err)
-			os.Exit(1)
-		}
+	if err := s.db.CreateFreshDB(); err != nil {
+		s.logger.Error("Could not create fresh DB", "err", err)
+		os.Exit(1)
 	}
 
 	// save sbc configuration information
