@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ZeljkoBenovic/tsbc/cmd/flagnames"
 	"github.com/hashicorp/go-hclog"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/viper"
@@ -174,7 +175,7 @@ func (d *db) storeSbcInfo() error {
 	}
 
 	res, err := stmt.Exec(
-		viper.GetString("sbc-fqdn"),
+		viper.GetString(flagnames.SbcFqdn),
 		d.insertID.kamailio,
 		d.insertID.rtpEngine,
 	)
@@ -250,16 +251,16 @@ func (d *db) storeRtpEngineData() error {
 
 	var (
 		rtpMaxPort, rtpMinPort, rtpSignalPort string
-		rtpPubIP                              = viper.GetString("rtp-public-ip")
+		rtpPubIP                              = viper.GetString(flagnames.RtpPublicIp)
 	)
 
 	// check if the table is empty
 	if !rows.Next() {
 		d.log.Debug("Rtp engine table is empty, using default first data")
 
-		rtpMaxPort = viper.GetString("rtp-max-port")
-		rtpMinPort = viper.GetString("rtp-min-port")
-		rtpSignalPort = viper.GetString("rtp-signal-port")
+		rtpMaxPort = viper.GetString(flagnames.RtpMaxPort)
+		rtpMinPort = viper.GetString(flagnames.RtpMinPort)
+		rtpSignalPort = viper.GetString(flagnames.RtpSignalPort)
 	} else {
 		rtpSignalPort = d.getSingleRecordAndIncreaseByValue(1, "ng_listen", "rtp_engine")
 		rtpMinPort = d.getSingleRecordAndIncreaseByValue(500, "rtp_min", "rtp_engine")
@@ -301,17 +302,17 @@ func (d *db) storeKamailioData() error {
 		enableSipDump                   int
 		sbcPort, udpSipPort, rtpEngPort string
 		// user must always set these values and/or they don't have to be unique
-		pbxIP   = viper.GetString("kamailio-pbx-ip")
-		pbxPort = viper.GetString("kamailio-pbx-port")
-		sbcFqdn = viper.GetString("sbc-fqdn")
+		pbxIP   = viper.GetString(flagnames.KamailioPbxIp)
+		pbxPort = viper.GetString(flagnames.KamailioPbxPort)
+		sbcFqdn = viper.GetString(flagnames.SbcFqdn)
 	)
 
 	// translate bool to int
-	if viper.GetBool("kamailio-new-config") {
+	if viper.GetBool(flagnames.KamailioNewConfig) {
 		newConfig = 1
 	}
 
-	if viper.GetBool("kamailio-sip-dump") {
+	if viper.GetBool(flagnames.KamailioSipDump) {
 		enableSipDump = 1
 	}
 
@@ -326,9 +327,9 @@ func (d *db) storeKamailioData() error {
 		d.log.Debug("Kamailio table is empty, using default first data")
 
 		// if there are no records in the table, default values will be used
-		rtpEngPort = viper.GetString("kamailio-rtpeng-port")
-		sbcPort = viper.GetString("kamailio-sbc-port")
-		udpSipPort = viper.GetString("kamailio-udp-sip-port")
+		rtpEngPort = viper.GetString(flagnames.KamailioRtpEngPort)
+		sbcPort = viper.GetString(flagnames.KamailioSbcPort)
+		udpSipPort = viper.GetString(flagnames.KamailioUdpSipPort)
 	} else {
 		d.log.Debug("Existing Kamailio data found, calculating next values")
 
@@ -376,18 +377,18 @@ func (d *db) storeKamailioData() error {
 
 func checkForRequiredFlags() error {
 	// pbx ip can not be undefined
-	if viper.GetString("kamailio-pbx-ip") == "" {
+	if viper.GetString(flagnames.KamailioPbxIp) == "" {
 		return ErrPbxIpNotDefined
 	}
 
 	// sbc name can not be undefined
-	if viper.GetString("sbc-fqdn") == "" {
+	if viper.GetString(flagnames.SbcFqdn) == "" {
 		return ErrSbcFqdnNotDefined
 	}
 
 	// TODO: add checks for valid IP address format
 	// public ip address must be defined
-	if viper.GetString("rtp-public-ip") == "" {
+	if viper.GetString(flagnames.RtpPublicIp) == "" {
 		return ErrRtpEnginePublicIPNotDefined
 	}
 

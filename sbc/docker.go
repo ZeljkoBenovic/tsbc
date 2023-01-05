@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/ZeljkoBenovic/tsbc/cmd/flagnames"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
@@ -73,7 +74,7 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 
 	switch contName {
 	case Kamailio:
-		containerName = viper.GetString("kamailio-image")
+		containerName = viper.GetString(flagnames.KamailioImage)
 		containerNamePostFix = "-kamailio"
 		dockerDefaultHostConfig.Mounts = []mount.Mount{
 			{
@@ -89,7 +90,7 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 			},
 		}
 	case RtpEngine:
-		containerName = viper.GetString("rtp-image")
+		containerName = viper.GetString(flagnames.RtpImage)
 		containerNamePostFix = "-rtp-engine"
 		dockerDefaultHostConfig.Mounts = []mount.Mount{
 			{
