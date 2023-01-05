@@ -3,7 +3,8 @@ package flagnames
 // define flag names as consts
 // needs to be separate package to avoid recursive import error
 const (
-	SbcFqdn string = "sbc-fqdn"
+	LogLevel string = "log-level"
+	SbcFqdn  string = "sbc-fqdn"
 
 	KamailioNewConfig  string = "kamailio-new-config"
 	KamailioSipDump    string = "kamailio-sip-dump"

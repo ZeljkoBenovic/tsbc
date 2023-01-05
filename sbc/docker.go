@@ -111,6 +111,7 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 	}
 
 	defer reader.Close()
+	// TODO: output docker logs to a log file
 	// output logs to console
 	io.Copy(os.Stdout, reader)
 

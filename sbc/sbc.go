@@ -5,22 +5,18 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/ZeljkoBenovic/tsbc/cmd/flagnames"
 	"github.com/ZeljkoBenovic/tsbc/db"
 	"github.com/docker/docker/client"
 	"github.com/hashicorp/go-hclog"
+	"github.com/spf13/viper"
 )
-
-type Config struct {
-	DomainName, Port string
-	LogLevel         string
-}
 
 type ISBC interface {
 	Run()
 }
 
 type sbc struct {
-	config   Config
 	ctx      context.Context
 	dockerCl *client.Client
 	logger   hclog.Logger
@@ -28,12 +24,12 @@ type sbc struct {
 	sbcData  db.Sbc
 }
 
-func NewSBC(sbcConfig Config) (ISBC, error) {
+func NewSBC() (ISBC, error) {
 	// TODO: logger configurability options
 	// create new logger instance
 	lg := hclog.New(&hclog.LoggerOptions{
 		Name:                 "sbc",
-		Level:                hclog.LevelFromString(sbcConfig.LogLevel),
+		Level:                hclog.LevelFromString(viper.GetString(flagnames.LogLevel)),
 		Color:                hclog.AutoColor,
 		ColorHeaderAndFields: true,
 	})
@@ -60,7 +56,6 @@ func NewSBC(sbcConfig Config) (ISBC, error) {
 
 	// return sbc instance
 	return &sbc{
-		config:   sbcConfig,
 		ctx:      context.Background(),
 		logger:   lg,
 		dockerCl: dCl,

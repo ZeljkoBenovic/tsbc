@@ -26,6 +26,7 @@ to quickly create a Cobra application.`,
 func Initialize(rootCmd *cobra.Command) {
 	// general flags
 	runCmd.Flags().String(flagnames.SbcFqdn, "", "fqdn that Kamailio will advertise")
+	runCmd.Flags().String(flagnames.LogLevel, "info", "log output level")
 	// kamailio flags
 	runCmd.Flags().Bool(flagnames.KamailioNewConfig, true, "generate new config file for Kamailio")
 	runCmd.Flags().Bool(flagnames.KamailioSipDump, false, "enable sip capture for Kamailio")
@@ -55,12 +56,8 @@ func Initialize(rootCmd *cobra.Command) {
 }
 
 func runCommandHandler(cmd *cobra.Command, args []string) {
-	// TODO: process config and pass it to the sbc instance
 	// create new sbc instance and pass parameters
-	sbcInstance, err := sbc.NewSBC(sbc.Config{
-		// TODO: handle log level via flags
-		LogLevel: "debug",
-	})
+	sbcInstance, err := sbc.NewSBC()
 	if err != nil {
 		log.Fatalln("Could not create sbc instance err=", err.Error())
 	}
