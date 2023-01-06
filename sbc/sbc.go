@@ -101,7 +101,8 @@ func (s *sbc) Run() {
 	// create and run containers infrastructure
 	if err = s.createAndRunSbcInfra(); err != nil {
 		s.logger.Error("Could not create SBC infrastructure", "err", err)
-		// TODO: add database revert if deployment fails
+		// if docker deployment fails, cleanup the database
+		s.db.RevertLastInsert()
 		os.Exit(1)
 	}
 }

@@ -16,6 +16,7 @@ type IDB interface {
 	SaveSBCInformation() (int64, error)
 	GetSBCParameters(sbcId int64) (Sbc, error)
 	Close() error
+	RevertLastInsert()
 }
 
 var (
@@ -63,6 +64,12 @@ func (d *db) Close() error {
 	return nil
 }
 
+func (d *db) RevertLastInsert() {
+	d.deleteRowWithID("sbc_info", d.insertID.sbcInstance)
+	d.deleteRowWithID("kamailio", d.insertID.kamailio)
+	d.deleteRowWithID("rtp_engine", d.insertID.rtpEngine)
+}
+
 func (d *db) CreateFreshDB() error {
 	var err error
 
@@ -82,11 +89,11 @@ func (d *db) CreateFreshDB() error {
 	// TODO: set appropriate types
 	schema := `create table kamailio
 (
-    new_config      INTEGER default 0,
-    enable_sipdump  INTEGER default 0,
     id              INTEGER
         constraint kamailio_pk
             primary key autoincrement,
+    new_config      INTEGER default 0,
+    enable_sipdump  INTEGER default 0,
     sbc_name        TEXT not null,
     sbc_tls_port    TEXT not null,
     sbc_udp_port    TEXT not null,
@@ -128,9 +135,11 @@ create table sbc_info
     fqdn          TEXT not null,
     created       DATE not null,
     kamailio_id   INTEGER not null
-        references kamailio,
+        references kamailio 
+            on delete cascade,
     rtp_engine_id INTEGER not null
-        references rtp_engine
+        references rtp_engine 
+            on delete cascade
 );`
 
 	d.log.Debug("Creating new db schema")
@@ -384,46 +393,6 @@ func (d *db) storeKamailioData() error {
 	}
 
 	d.log.Debug("Kamailio configuration inserted", "insert_id", d.insertID.kamailio)
-
-	return nil
-}
-
-func (d *db) checkIfTableExists(tableName string) (bool, error) {
-	stmt, err := d.db.Prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?")
-	if err != nil {
-		return false, fmt.Errorf("could not prepare statement err=%w", err)
-	}
-
-	res, err := stmt.Query(tableName)
-	if err != nil {
-		return false, fmt.Errorf("could not run query err=%w", err)
-	}
-
-	defer res.Close()
-
-	if res.Next() {
-		return true, nil
-	}
-
-	return false, nil
-}
-
-func checkForRequiredFlags() error {
-	// pbx ip can not be undefined
-	if viper.GetString(flagnames.KamailioPbxIp) == "" {
-		return ErrPbxIpNotDefined
-	}
-
-	// sbc name can not be undefined
-	if viper.GetString(flagnames.SbcFqdn) == "" {
-		return ErrSbcFqdnNotDefined
-	}
-
-	// TODO: add checks for valid IP address format
-	// public ip address must be defined
-	if viper.GetString(flagnames.RtpPublicIp) == "" {
-		return ErrRtpEnginePublicIPNotDefined
-	}
 
 	return nil
 }
