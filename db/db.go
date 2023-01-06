@@ -17,6 +17,9 @@ type IDB interface {
 	GetSBCParameters(sbcId int64) (Sbc, error)
 	Close() error
 	RevertLastInsert()
+	SaveContainerID(rowID int64, tableName, id string) error
+	GetKamailioInsertID() int64
+	GetRTPEngineInsertID() int64
 }
 
 var (
@@ -64,6 +67,31 @@ func (d *db) Close() error {
 	return nil
 }
 
+func (d *db) GetKamailioInsertID() int64 {
+	return d.insertID.kamailio
+}
+
+func (d *db) GetRTPEngineInsertID() int64 {
+	return d.insertID.rtpEngine
+}
+
+func (d *db) SaveContainerID(rowID int64, tableName, containerID string) error {
+	stmt, err := d.db.Prepare(fmt.Sprintf("UPDATE %s SET container_id = ? WHERE id = ?", tableName))
+	if err != nil {
+		return fmt.Errorf("could not prepare insert statement: %w", err)
+	}
+
+	row, err := stmt.Exec(containerID, rowID)
+	if err != nil {
+		return fmt.Errorf("could not execute prepared insert statement: %w", err)
+	}
+
+	afRows, _ := row.RowsAffected()
+	d.log.Debug("Container ID saved", "affected_rows", afRows)
+
+	return nil
+}
+
 func (d *db) RevertLastInsert() {
 	d.deleteRowWithID("sbc_info", d.insertID.sbcInstance)
 	d.deleteRowWithID("kamailio", d.insertID.kamailio)
@@ -99,7 +127,8 @@ func (d *db) CreateFreshDB() error {
     sbc_udp_port    TEXT not null,
     pbx_ip          TEXT not null,
     pbx_port        TEXT not null,
-    rtp_engine_port TEXT not null
+    rtp_engine_port TEXT not null,
+	container_id    TEXT DEFAULT null
 );
 
 create unique index kamailio_id_uindex
@@ -125,7 +154,8 @@ create table rtp_engine
     rtp_max         TEXT not null,
     rtp_min         TEXT not null,
     media_public_ip TEXT not null,
-    ng_listen       TEXT not null
+    ng_listen       TEXT not null,
+	container_id    TEXT default null
 );
 
 create table sbc_info

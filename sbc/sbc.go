@@ -77,6 +77,7 @@ func (s *sbc) Run() {
 	// close connections after this function finishes
 	defer s.close()
 
+	// create new schema if db is empty
 	if err := s.db.CreateFreshDB(); err != nil {
 		s.logger.Error("Could not create fresh DB", "err", err)
 		os.Exit(1)

@@ -70,12 +70,16 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 	var (
 		containerName        string
 		containerNamePostFix string
+		dbTableName          string
+		rowID                int64
 	)
 
 	switch contName {
 	case Kamailio:
 		containerName = viper.GetString(flagnames.KamailioImage)
 		containerNamePostFix = "-kamailio"
+		dbTableName = "kamailio"
+		rowID = s.db.GetKamailioInsertID()
 		dockerDefaultHostConfig.Mounts = []mount.Mount{
 			{
 				Type:   mount.TypeVolume,
@@ -92,6 +96,8 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 	case RtpEngine:
 		containerName = viper.GetString(flagnames.RtpImage)
 		containerNamePostFix = "-rtp-engine"
+		dbTableName = "rtp_engine"
+		rowID = s.db.GetRTPEngineInsertID()
 		dockerDefaultHostConfig.Mounts = []mount.Mount{
 			{
 				Type:   mount.TypeVolume,
@@ -122,6 +128,13 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 	}, dockerDefaultHostConfig, nil, nil, s.sbcData.SbcName+containerNamePostFix)
 	if err != nil {
 		s.logger.Error("Could not create new container", "image", containerName, "err", err)
+
+		return err
+	}
+
+	// save container id to database
+	if err = s.db.SaveContainerID(rowID, dbTableName, resp.ID); err != nil {
+		s.logger.Error("Could not save container ID", "err", err)
 
 		return err
 	}
