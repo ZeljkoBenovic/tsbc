@@ -2,6 +2,7 @@ package destroy
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
 
@@ -112,7 +113,12 @@ func (d *destroy) destroyContainerWithVolumes(containerID string) error {
 	// create new docker client instance
 	d.dClt, err = client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return err
+		return fmt.Errorf("could not initialize docker: %w", err)
+	}
+
+	cDetails, err := d.dClt.ContainerInspect(d.ctx, containerID)
+	if err != nil {
+		return fmt.Errorf("could not inspect container: %w", err)
 	}
 
 	// remove container
@@ -123,13 +129,21 @@ func (d *destroy) destroyContainerWithVolumes(containerID string) error {
 		return err
 	}
 
-	// TODO: remove volumes
+	d.logger.Debug("Container removed", "id", containerID)
+
+	for _, vol := range cDetails.Mounts {
+		if err = d.dClt.VolumeRemove(d.ctx, vol.Name, true); err != nil {
+			d.logger.Error("Could not delete volume", "name", vol.Name, "err", err)
+		}
+
+		d.logger.Debug("Volume removed", "name", vol.Name)
+	}
 
 	return nil
 }
 
 // close database and docker client
 func (d *destroy) close() {
-	d.dClt.Close()
-	d.db.Close()
+	_ = d.dClt.Close()
+	_ = d.db.Close()
 }
