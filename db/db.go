@@ -20,6 +20,8 @@ type IDB interface {
 	SaveContainerID(rowID int64, tableName, id string) error
 	GetKamailioInsertID() int64
 	GetRTPEngineInsertID() int64
+	GetContainerIDsFromSbcFqdn(sbcFqdn string) []string
+	RemoveSbcInfo(sbcFqdn string) error
 }
 
 var (
@@ -73,6 +75,70 @@ func (d *db) GetKamailioInsertID() int64 {
 
 func (d *db) GetRTPEngineInsertID() int64 {
 	return d.insertID.rtpEngine
+}
+
+func (d *db) RemoveSbcInfo(sbcFqdn string) error {
+	stmt, err := d.db.Prepare(
+		"SELECT sbc_info.id, k.id, re.id " +
+			"FROM sbc_info " +
+			"JOIN kamailio k on k.id = sbc_info.kamailio_id " +
+			"JOIN rtp_engine re on re.id = sbc_info.rtp_engine_id " +
+			"WHERE sbc_info.id == (" +
+			"SELECT id from sbc_info WHERE fqdn = ?)")
+	if err != nil {
+		return fmt.Errorf("could not prepare select statement: %w", err)
+	}
+
+	row, err := stmt.Query(sbcFqdn)
+	if err != nil {
+		return fmt.Errorf("could not query select statement: %w", err)
+	}
+
+	sbcId := int64(0)
+	kamId := int64(0)
+	rtpId := int64(0)
+
+	for row.Next() {
+		if err = row.Scan(&sbcId, &kamId, &rtpId); err != nil {
+			return fmt.Errorf("could not scan ids into vars: %w", err)
+		}
+	}
+
+	d.deleteRowWithID("sbc_info", sbcId)
+	d.deleteRowWithID("kamailio", kamId)
+	d.deleteRowWithID("rtp_engine", rtpId)
+
+	d.log.Debug("Deleted sbc information from database", "sbc_fqdn", sbcFqdn)
+
+	return nil
+}
+func (d *db) GetContainerIDsFromSbcFqdn(sbcFqdn string) []string {
+	stmt, err := d.db.Prepare(
+		"SELECT k.container_id, r.container_id " +
+			"FROM sbc_info " +
+			"JOIN kamailio k ON k.id = sbc_info.kamailio_id " +
+			"JOIN rtp_engine r ON sbc_info.rtp_engine_id = r.id " +
+			"WHERE sbc_info.fqdn = ?")
+	if err != err {
+		d.log.Error("Could not prepare select statement", "err", err)
+
+		return nil
+	}
+
+	ids := struct {
+		kamailio  string
+		rtpEngine string
+	}{}
+
+	if err = stmt.QueryRow(sbcFqdn).Scan(&ids.kamailio, &ids.rtpEngine); err != nil {
+		d.log.Error("Could not query and scan prepared select statement", "err", err)
+
+		return nil
+	}
+
+	_ = stmt.Close()
+
+	return []string{ids.kamailio, ids.rtpEngine}
 }
 
 func (d *db) SaveContainerID(rowID int64, tableName, containerID string) error {

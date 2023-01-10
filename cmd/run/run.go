@@ -23,7 +23,7 @@ to quickly create a Cobra application.`,
 	Run: runCommandHandler,
 }
 
-func Initialize(rootCmd *cobra.Command) {
+func GetCmd() *cobra.Command {
 	// general flags
 	runCmd.Flags().String(flagnames.SbcFqdn, "", "fqdn that Kamailio will advertise")
 	runCmd.Flags().String(flagnames.LogLevel, "info", "log output level")
@@ -52,7 +52,7 @@ func Initialize(rootCmd *cobra.Command) {
 		log.Fatalln("Could not bind to flags err=", err.Error())
 	}
 
-	rootCmd.AddCommand(runCmd)
+	return runCmd
 }
 
 func runCommandHandler(cmd *cobra.Command, args []string) {

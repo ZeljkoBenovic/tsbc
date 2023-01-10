@@ -103,5 +103,5 @@ func (d *db) deleteRowWithID(tableName string, insertID int64) {
 		return
 	}
 
-	d.log.Info("Revert completed successfully", "table", tableName, "deleted_rows", rowsAffected)
+	d.log.Info("Record deleted successfully", "table", tableName, "deleted_rows", rowsAffected)
 }

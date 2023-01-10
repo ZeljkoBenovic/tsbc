@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/ZeljkoBenovic/tsbc/cmd/destroy"
 	"github.com/ZeljkoBenovic/tsbc/cmd/run"
 	"github.com/spf13/cobra"
 )
@@ -24,13 +25,14 @@ to quickly create a Cobra application.`,
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
+	// TODO: add restart command
+	rootCmd.AddCommand(
+		run.GetCmd(),
+		destroy.GetCmd(),
+	)
+
 	err := rootCmd.Execute()
 	if err != nil {
 		log.Fatalln(fmt.Sprintf("Could not execute command err=%s", err.Error()))
 	}
-}
-
-func init() {
-	// TODO: add restart and destroy commands
-	run.Initialize(rootCmd)
 }
