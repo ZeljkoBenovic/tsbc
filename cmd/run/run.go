@@ -26,6 +26,7 @@ to quickly create a Cobra application.`,
 func GetCmd() *cobra.Command {
 	// general flags
 	runCmd.Flags().String(flagnames.SbcFqdn, "", "fqdn that Kamailio will advertise")
+	runCmd.Flags().String(flagnames.HostIP, "", "the static lan ip address of the docker host")
 	runCmd.Flags().String(flagnames.LogLevel, "info", "log output level")
 	// kamailio flags
 	runCmd.Flags().Bool(flagnames.KamailioNewConfig, true, "generate new config file for Kamailio")
@@ -35,7 +36,7 @@ func GetCmd() *cobra.Command {
 	runCmd.Flags().String(flagnames.KamailioPbxIp, "", "ip address of internal PBX")
 	runCmd.Flags().String(flagnames.KamailioPbxPort, "5060", "sip port of internal PBX")
 	runCmd.Flags().String(flagnames.KamailioRtpEngPort, "20001", "rtp engine signalisation port")
-	runCmd.Flags().String(flagnames.KamailioImage, "zeljkoiphouse/kamailio:latest", "kamailio docker image name")
+	runCmd.Flags().String(flagnames.KamailioImage, "zeljkoiphouse/kamailio:v0.2", "kamailio docker image name")
 	// rtp engine flags
 	runCmd.Flags().String(flagnames.RtpMinPort, "20501", "start port for RTP")
 	runCmd.Flags().String(flagnames.RtpMaxPort, "21000", "end port for RTP")
@@ -46,6 +47,7 @@ func GetCmd() *cobra.Command {
 	_ = runCmd.MarkFlagRequired(flagnames.SbcFqdn)
 	_ = runCmd.MarkFlagRequired(flagnames.RtpPublicIp)
 	_ = runCmd.MarkFlagRequired(flagnames.KamailioPbxIp)
+	_ = runCmd.MarkFlagRequired(flagnames.HostIP)
 
 	// bind flags to viper
 	if err := viper.BindPFlags(runCmd.Flags()); err != nil {

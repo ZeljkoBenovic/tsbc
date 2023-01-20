@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/ZeljkoBenovic/tsbc/cmd/flagnames"
 	"github.com/docker/docker/api/types"
@@ -18,17 +20,78 @@ type ContainerName int
 const (
 	Kamailio ContainerName = iota
 	RtpEngine
+	LetsEncrypt
 )
 
-var dockerDefaultHostConfig = &container.HostConfig{
-	NetworkMode: "host",
-	AutoRemove:  false,
-	RestartPolicy: container.RestartPolicy{
-		Name:              "no",
-		MaximumRetryCount: 0,
-	},
-}
 var ErrContainerNameNotSupported = errors.New("selected container type not supported")
+
+func (s *sbc) handleTLSCertificates() error {
+	s.logger.Debug("Checking if SBC TLS certificate is already created")
+	fqdnNames, err := s.db.GetAllFqdnNames()
+	if err != nil {
+		return fmt.Errorf("could not get fqdn names: %w", err)
+	}
+
+	if err = s.createAndRunLetsEncrypt(fqdnNames); err != nil {
+		return fmt.Errorf("could not create and run lets encrypt node: %w", err)
+	}
+
+	return nil
+}
+
+func (s *sbc) removeLetsEncryptNode() error {
+	nodeID, err := s.db.GetLetsEncryptNodeID()
+	if err != nil {
+		return fmt.Errorf("could not get letsencrypt container_id: %w", err)
+	}
+
+	if nodeID != "" {
+		if err = s.dockerCl.ContainerRemove(s.ctx, nodeID, types.ContainerRemoveOptions{
+			Force:         true,
+			RemoveVolumes: true,
+		}); err != nil {
+			return fmt.Errorf("could not remove letsencrypt container: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *sbc) createAndRunLetsEncrypt(fqdnNames []string) error {
+	// remove the current letsencrypt container
+	if err := s.removeLetsEncryptNode(); err != nil {
+		return err
+	}
+
+	// TODO: modify certs location in kamailio container so that we don't need to create links
+
+	firstFqdnSplitByDot := strings.Split(fqdnNames[0], ".")
+
+	extraDomains := ""
+	if len(fqdnNames) > 1 {
+		extraDomains = strings.Join(fqdnNames[1:], ",")
+	}
+
+	envVars := []string{
+		fmt.Sprintf("PUID=1000"),
+		fmt.Sprintf("PGID=1000"),
+		// TODO: sould be defined from flags
+		fmt.Sprintf("TZ=Europe/Belgrade"),
+		fmt.Sprintf("VALIDATION=http"),
+		fmt.Sprintf("URL=%s", firstFqdnSplitByDot[1]+"."+firstFqdnSplitByDot[2]),
+		fmt.Sprintf("SUBDOMAINS=%s", firstFqdnSplitByDot[0]),
+		fmt.Sprintf("ONLY_SUBDOMAINS=true"),
+		fmt.Sprintf("EXTRA_DOMAINS=%s", extraDomains),
+		// TODO: should be defined from flags
+		fmt.Sprintf("STAGING=true"),
+	}
+
+	if err := s.createAndRunContainer(LetsEncrypt, envVars); err != nil {
+		return err
+	}
+
+	return nil
+}
 
 func (s *sbc) createAndRunSbcInfra() error {
 	// environment variables for RTP Engine container
@@ -39,6 +102,18 @@ func (s *sbc) createAndRunSbcInfra() error {
 		fmt.Sprintf("NG_LISTEN=%s", s.sbcData.NgListen),
 	}
 
+	fqdnNames, err := s.db.GetAllFqdnNames()
+	if err != nil {
+		s.logger.Error("Could not get the list of fqdn names")
+		return err
+	}
+
+	// the first fqdn name will always be the folder for all certificates
+	certFolderName := s.sbcData.SbcName
+	if len(fqdnNames) > 1 {
+		certFolderName = fqdnNames[0]
+	}
+
 	// environment variables for Kamailio container
 	kamailioEnvVars := []string{
 		fmt.Sprintf("NEW_CONFIG=%t", s.sbcData.NewConfig),
@@ -46,12 +121,13 @@ func (s *sbc) createAndRunSbcInfra() error {
 		fmt.Sprintf("ADVERTISE_IP=%s", s.sbcData.SbcName),
 		fmt.Sprintf("ALIAS=%s", s.sbcData.SbcName),
 		fmt.Sprintf("SBC_NAME=%s", s.sbcData.SbcName),
+		fmt.Sprintf("CERT_FOLDER_NAME=%s", certFolderName),
 		fmt.Sprintf("SBC_PORT=%s", s.sbcData.SbcTLSPort),
-		// TODO: add host ip into db, and set as host ip - HOST_IP
+		fmt.Sprintf("HOST_IP=%s", viper.GetString(flagnames.HostIP)),
 		fmt.Sprintf("UDP_SIP_PORT=%s", s.sbcData.SbcUDPPort),
 		fmt.Sprintf("PBX_IP=%s", s.sbcData.PbxIP),
 		fmt.Sprintf("PBX_PORT=%s", s.sbcData.PbxPort),
-		// TODO: add host ip into db, get it and set as rptengine host - RTP_ENG_IP
+		fmt.Sprintf("RTP_ENG_IP=%s", viper.GetString(flagnames.HostIP)),
 		fmt.Sprintf("RTP_ENG_PORT=%s", s.sbcData.RtpEnginePort),
 	}
 
@@ -67,20 +143,31 @@ func (s *sbc) createAndRunSbcInfra() error {
 }
 
 func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) error {
-	var (
-		containerName        string
-		containerNamePostFix string
-		dbTableName          string
-		rowID                int64
-	)
+	// define container custom parameters
+	containerParams := struct {
+		imageName               string
+		containerName           string
+		dbTableName             string
+		rowID                   int64
+		dockerDefaultHostConfig *container.HostConfig
+	}{
+		dockerDefaultHostConfig: &container.HostConfig{
+			NetworkMode: "host",
+			AutoRemove:  false,
+			RestartPolicy: container.RestartPolicy{
+				Name:              "on-failure",
+				MaximumRetryCount: 10,
+			},
+		},
+	}
 
 	switch contName {
 	case Kamailio:
-		containerName = viper.GetString(flagnames.KamailioImage)
-		containerNamePostFix = "-kamailio"
-		dbTableName = "kamailio"
-		rowID = s.db.GetKamailioInsertID()
-		dockerDefaultHostConfig.Mounts = []mount.Mount{
+		containerParams.imageName = viper.GetString(flagnames.KamailioImage)
+		containerParams.containerName = s.sbcData.SbcName + "-kamailio"
+		containerParams.dbTableName = "kamailio"
+		containerParams.rowID = s.db.GetKamailioInsertID()
+		containerParams.dockerDefaultHostConfig.Mounts = []mount.Mount{
 			{
 				Type:   mount.TypeVolume,
 				Source: s.sbcData.SbcName + "-kamcfg",
@@ -92,26 +179,45 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 				Source: s.sbcData.SbcName + "-sipdump",
 				Target: "/tmp",
 			},
+			{
+				Type:   mount.TypeVolume,
+				Source: "certificates",
+				Target: "/cert",
+			},
 		}
 	case RtpEngine:
-		containerName = viper.GetString(flagnames.RtpImage)
-		containerNamePostFix = "-rtp-engine"
-		dbTableName = "rtp_engine"
-		rowID = s.db.GetRTPEngineInsertID()
-		dockerDefaultHostConfig.Mounts = []mount.Mount{
+		containerParams.imageName = viper.GetString(flagnames.RtpImage)
+		containerParams.containerName = s.sbcData.SbcName + "-rtp-engine"
+		containerParams.dbTableName = "rtp_engine"
+		containerParams.rowID = s.db.GetRTPEngineInsertID()
+		containerParams.dockerDefaultHostConfig.Mounts = []mount.Mount{
 			{
 				Type:   mount.TypeVolume,
 				Source: s.sbcData.SbcName + "-rtp_eng_tmp",
 				Target: "/tmp",
 			},
 		}
+	case LetsEncrypt:
+		containerParams.imageName = "linuxserver/swag"
+		containerParams.containerName = "certificates-handler"
+		containerParams.dbTableName = "letsencrypt"
+		// table index will always be the same, as we have only one instance,
+		// and it gets replaced everytime
+		containerParams.rowID = 1
+		containerParams.dockerDefaultHostConfig.Mounts = []mount.Mount{
+			{
+				Type:   mount.TypeVolume,
+				Source: "certificates",
+				Target: "/config/etc/letsencrypt",
+			},
+		}
 	default:
 		return ErrContainerNameNotSupported
 	}
 
-	reader, err := s.dockerCl.ImagePull(s.ctx, containerName, types.ImagePullOptions{})
+	reader, err := s.dockerCl.ImagePull(s.ctx, containerParams.imageName, types.ImagePullOptions{})
 	if err != nil {
-		s.logger.Error("Could not pull Kamailio docker image", "image", containerName, "err", err)
+		s.logger.Error("Could not pull Kamailio docker image", "image", containerParams.imageName, "err", err)
 
 		return err
 	}
@@ -122,32 +228,37 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 	io.Copy(os.Stdout, reader)
 
 	resp, err := s.dockerCl.ContainerCreate(s.ctx, &container.Config{
-		Image: containerName,
+		Image: containerParams.imageName,
 		Tty:   false,
 		Env:   envVars,
-	}, dockerDefaultHostConfig, nil, nil, s.sbcData.SbcName+containerNamePostFix)
+	}, containerParams.dockerDefaultHostConfig, nil, nil, containerParams.containerName)
 	if err != nil {
-		s.logger.Error("Could not create new container", "image", containerName, "err", err)
+		s.logger.Error("Could not create new container", "image", containerParams.containerName, "err", err)
 
 		return err
 	}
 
-	// save container id to database
-	if err = s.db.SaveContainerID(rowID, dbTableName, resp.ID); err != nil {
+	if err = s.db.SaveContainerID(containerParams.rowID, containerParams.dbTableName, resp.ID); err != nil {
 		s.logger.Error("Could not save container ID", "err", err)
 
 		return err
 	}
 
+	if contName == Kamailio {
+		s.logger.Info("Starting kamailio...")
+		s.logger.Debug("Sleeping kamailio container deployment due to the certificate generation")
+		time.Sleep(30 * time.Second)
+	}
+
 	if err = s.dockerCl.ContainerStart(s.ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
 		s.logger.Error("Could not start container",
 			"id", resp.ID,
-			"image", containerName,
+			"image", containerParams.containerName,
 			"err", err.Error())
 	}
 
 	s.logger.Info("Container started",
-		"image_name", containerName,
+		"image_name", containerParams.containerName,
 		"container_id", resp.ID)
 
 	return nil

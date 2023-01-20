@@ -5,6 +5,7 @@ package flagnames
 const (
 	LogLevel string = "log-level"
 	SbcFqdn  string = "sbc-fqdn"
+	HostIP   string = "host-ip"
 
 	KamailioNewConfig  string = "kamailio-new-config"
 	KamailioSipDump    string = "kamailio-sip-dump"

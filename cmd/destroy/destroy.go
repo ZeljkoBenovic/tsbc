@@ -132,6 +132,10 @@ func (d *destroy) destroyContainerWithVolumes(containerID string) error {
 	d.logger.Debug("Container removed", "id", containerID)
 
 	for _, vol := range cDetails.Mounts {
+		// dont delete certificates volume
+		if vol.Name == "certificates" {
+			continue
+		}
 		if err = d.dClt.VolumeRemove(d.ctx, vol.Name, true); err != nil {
 			d.logger.Error("Could not delete volume", "name", vol.Name, "err", err)
 		}

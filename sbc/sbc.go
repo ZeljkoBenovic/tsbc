@@ -98,6 +98,13 @@ func (s *sbc) Run() {
 	}
 
 	// TODO: implement and handle Lets Encrypt container
+	// create and run lets encrypt node
+	if err = s.handleTLSCertificates(); err != nil {
+		s.logger.Error("Could not handle TLS certificate", "err", err)
+		// if tls deployment fails, cleanup the database
+		s.db.RevertLastInsert()
+		os.Exit(1)
+	}
 
 	// create and run containers infrastructure
 	if err = s.createAndRunSbcInfra(); err != nil {

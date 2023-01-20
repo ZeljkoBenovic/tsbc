@@ -6,6 +6,10 @@ type Sbc struct {
 	RtpEngine
 }
 
+type LetsEncrypt struct {
+	Timezone string
+}
+
 type Kamailio struct {
 	NewConfig     bool
 	EnableSipDump bool

@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -12,15 +13,20 @@ import (
 )
 
 type IDB interface {
-	CreateFreshDB() error
-	SaveSBCInformation() (int64, error)
-	GetSBCParameters(sbcId int64) (Sbc, error)
 	Close() error
-	RevertLastInsert()
+	CreateFreshDB() error
+
+	SaveSBCInformation() (int64, error)
 	SaveContainerID(rowID int64, tableName, id string) error
+
+	GetSBCParameters(sbcId int64) (Sbc, error)
 	GetKamailioInsertID() int64
 	GetRTPEngineInsertID() int64
 	GetContainerIDsFromSbcFqdn(sbcFqdn string) []string
+	GetAllFqdnNames() ([]string, error)
+	GetLetsEncryptNodeID() (string, error)
+
+	RevertLastInsert()
 	RemoveSbcInfo(sbcFqdn string) error
 }
 
@@ -75,6 +81,40 @@ func (d *db) GetKamailioInsertID() int64 {
 
 func (d *db) GetRTPEngineInsertID() int64 {
 	return d.insertID.rtpEngine
+}
+
+func (d *db) GetAllFqdnNames() ([]string, error) {
+	rows, err := d.db.QueryContext(context.Background(), "SELECT fqdn from sbc_info")
+	if err != nil {
+		return nil, fmt.Errorf("could not get fqdns from database: %w", err)
+	}
+
+	resp := make([]string, 0)
+	fqdn := ""
+
+	for rows.Next() {
+		if err = rows.Scan(&fqdn); err != nil {
+			d.log.Error("Could not scan fqdn from database", "err", err)
+		}
+
+		resp = append(resp, fqdn)
+	}
+
+	return resp, nil
+}
+
+func (d *db) GetLetsEncryptNodeID() (string, error) {
+	var nodeID = new(string)
+
+	// there is always only one letsencrypt node
+	if err := d.db.QueryRowContext(
+		context.Background(),
+		"SELECT container_id FROM letsencrypt WHERE id = 1;").
+		Scan(nodeID); err != nil {
+		return "", err
+	}
+	
+	return *nodeID, nil
 }
 
 func (d *db) RemoveSbcInfo(sbcFqdn string) error {
@@ -224,6 +264,14 @@ create table rtp_engine
 	container_id    TEXT default null
 );
 
+create table letsencrypt
+(
+    id INTEGER primary key autoincrement,
+    container_id    TEXT not null
+);
+/*insert dummy data into letsencrypt as it will get overridden*/
+INSERT INTO letsencrypt (container_id) VALUES ('');
+                                                   
 create table sbc_info
 (
     id            INTEGER
