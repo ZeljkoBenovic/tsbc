@@ -1,13 +1,13 @@
-package db
+package types
 
 type Sbc struct {
 	Fqdn string
 	Kamailio
 	RtpEngine
-}
 
-type LetsEncrypt struct {
-	Timezone string
+	LogFileLocation       string
+	DockerLogFileLocation string
+	SQLiteFileLocation    string
 }
 
 type Kamailio struct {

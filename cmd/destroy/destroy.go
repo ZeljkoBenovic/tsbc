@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/ZeljkoBenovic/tsbc/cmd/flagnames"
+	"github.com/ZeljkoBenovic/tsbc/cmd/helpers/flagnames"
 	"github.com/ZeljkoBenovic/tsbc/db"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -40,40 +40,80 @@ func GetCmd() *cobra.Command {
 	// define flags
 	destroyCmd.Flags().String(flagnames.SbcFqdn, "", "SBC FQDN to destroy")
 	destroyCmd.Flags().String(flagnames.LogLevel, "info", "set log level")
+	destroyCmd.Flags().String(flagnames.DBFileLocation, "",
+		fmt.Sprintf("sqlite file location, file name must end with .db (default: %s)", db.DefaultDBLocation()))
+	destroyCmd.Flags().Bool(flagnames.DestroyTlsNode, false, "destroy LetsEncrypt instance")
 
-	// mark required flags
-	_ = destroyCmd.MarkFlagRequired(flagnames.SbcFqdn)
+	destroyCmd.MarkFlagsMutuallyExclusive(flagnames.SbcFqdn, flagnames.DestroyTlsNode)
 
 	// bind flags to viper
 	if err := viper.BindPFlag("destroy.fqdn", destroyCmd.Flag(flagnames.SbcFqdn)); err != nil {
-		log.Fatalln("Could not bind to flags err=", err.Error())
+		log.Fatalln("Could not bind destroy.fqdn err:", err.Error())
+	}
+
+	if err := viper.BindPFlag("destroy.log-level", destroyCmd.Flag(flagnames.LogLevel)); err != nil {
+		log.Fatalln("Could not bind destroy.log-level:", err.Error())
+	}
+
+	if err := viper.BindPFlag("destroy.db-file", destroyCmd.Flag(flagnames.DBFileLocation)); err != nil {
+		log.Fatalln("Could not bind destroy.db-file:", err.Error())
+	}
+
+	if err := viper.BindPFlag("destroy.tls-node", destroyCmd.Flag(flagnames.DestroyTlsNode)); err != nil {
+		log.Fatalln("Could not bind destroy.tls-node", err.Error())
 	}
 
 	// add command to root
 	return destroyCmd
 }
 
-func runCommandHandler(_ *cobra.Command, _ []string) {
-	var (
-		err error
-		dst = destroy{
-			ctx: context.Background(),
-		}
-	)
-
-	defer dst.close()
-
-	dst.logger = hclog.New(&hclog.LoggerOptions{
+func newDestroy() (*destroy, error) {
+	logger := hclog.New(&hclog.LoggerOptions{
 		Name:                 "sbc.destroy",
-		Level:                hclog.LevelFromString(viper.GetString(flagnames.LogLevel)),
+		Level:                hclog.LevelFromString(viper.GetString("destroy.log-level")),
 		Color:                hclog.AutoColor,
 		ColorHeaderAndFields: true,
 	})
 
-	dst.db, err = db.NewDB(dst.logger)
+	dClt, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		dst.logger.Error("Could not create new database instance", "err", err)
+		return nil, fmt.Errorf("could not initialize docker: %w", err)
+	}
 
+	dbInst, err := db.NewDB(logger, defaultDBLocation())
+	if err != nil {
+		return nil, fmt.Errorf("could not create new database instance: %w", err)
+	}
+
+	return &destroy{
+		db:     dbInst,
+		logger: logger,
+		dClt:   dClt,
+		ctx:    context.Background(),
+	}, nil
+}
+
+func runCommandHandler(cmd *cobra.Command, _ []string) {
+	// create new destroy instance
+	dst, err := newDestroy()
+	if err != nil {
+		dst.logger.Error("Could not run destroy", "err", err)
+
+		os.Exit(1)
+	}
+
+	defer dst.close()
+
+	// destroy LetsEncrypt instance only, if selected
+	if viper.GetBool("destroy.tls-node") {
+		dst.destroyLetsEncryptNode()
+
+		return
+	}
+
+	// check that sbc-fqdn flag is set
+	if viper.GetString("destroy.fqdn") == "" {
+		dst.logger.Error("SBC FQDN flag not set, but it is required")
 		os.Exit(1)
 	}
 
@@ -108,14 +148,32 @@ func runCommandHandler(_ *cobra.Command, _ []string) {
 	dst.logger.Info("Database information deleted")
 }
 
-func (d *destroy) destroyContainerWithVolumes(containerID string) error {
-	var err error
-	// create new docker client instance
-	d.dClt, err = client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+func (d *destroy) destroyLetsEncryptNode() {
+	// get LetsEncrypt node ID
+	nodeId, err := d.db.GetLetsEncryptNodeID()
 	if err != nil {
-		return fmt.Errorf("could not initialize docker: %w", err)
+		d.logger.Error("Could not get LetsEncrypt node id", "err", err)
+
+		return
 	}
 
+	// and destroy that node
+	if err = d.destroyContainerWithVolumes(nodeId); err != nil {
+		d.logger.Warn("Could not destroy LetsEncrypt node", "err", err)
+	}
+
+	// delete database records
+	if err = d.db.RemoveLetsEncryptInfo(nodeId); err != nil {
+		d.logger.Error("Could not delete LetsEncrypt", "err", err)
+	}
+
+	d.logger.Info("LetsEncrypt node deleted")
+
+	return
+}
+
+func (d *destroy) destroyContainerWithVolumes(containerID string) error {
+	// inspect container to get the list of volumes
 	cDetails, err := d.dClt.ContainerInspect(d.ctx, containerID)
 	if err != nil {
 		return fmt.Errorf("could not inspect container: %w", err)
@@ -133,7 +191,7 @@ func (d *destroy) destroyContainerWithVolumes(containerID string) error {
 
 	for _, vol := range cDetails.Mounts {
 		// dont delete certificates volume
-		if vol.Name == "certificates" {
+		if vol.Name == "certificates" && !viper.GetBool("destroy.tls-node") {
 			continue
 		}
 		if err = d.dClt.VolumeRemove(d.ctx, vol.Name, true); err != nil {
@@ -150,4 +208,13 @@ func (d *destroy) destroyContainerWithVolumes(containerID string) error {
 func (d *destroy) close() {
 	_ = d.dClt.Close()
 	_ = d.db.Close()
+}
+
+func defaultDBLocation() string {
+	// set default location for database file
+	if viper.GetString("destroy.db-file") == "" {
+		return db.DefaultDBLocation()
+	}
+
+	return viper.GetString("destroy.db-file")
 }

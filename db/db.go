@@ -6,7 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ZeljkoBenovic/tsbc/cmd/flagnames"
+	"github.com/ZeljkoBenovic/tsbc/cmd/helpers/flagnames"
+	"github.com/ZeljkoBenovic/tsbc/sbc/types"
 	"github.com/hashicorp/go-hclog"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/viper"
@@ -19,7 +20,7 @@ type IDB interface {
 	SaveSBCInformation() (int64, error)
 	SaveContainerID(rowID int64, tableName, id string) error
 
-	GetSBCParameters(sbcId int64) (Sbc, error)
+	GetSBCParameters(sbcId int64) (types.Sbc, error)
 	GetKamailioInsertID() int64
 	GetRTPEngineInsertID() int64
 	GetContainerIDsFromSbcFqdn(sbcFqdn string) []string
@@ -28,6 +29,7 @@ type IDB interface {
 
 	RevertLastInsert()
 	RemoveSbcInfo(sbcFqdn string) error
+	RemoveLetsEncryptInfo(nodeId string) error
 }
 
 var (
@@ -47,7 +49,7 @@ type insertID struct {
 	kamailio, rtpEngine, sbcInstance int64
 }
 
-func NewDB(logger hclog.Logger) (IDB, error) {
+func NewDB(logger hclog.Logger, dbLocation string) (IDB, error) {
 	var err error
 	dbInstance := &db{
 		log: logger.Named("db"),
@@ -55,7 +57,7 @@ func NewDB(logger hclog.Logger) (IDB, error) {
 
 	dbInstance.log.Debug("Creating new SQLite instance")
 
-	dbInstance.db, err = sql.Open("sqlite3", "sbc.db")
+	dbInstance.db, err = sql.Open("sqlite3", dbLocation)
 	if err != nil {
 		dbInstance.log.Error("Could not open db connection", "data_source", "sbc.db", "err", err)
 
@@ -107,14 +109,35 @@ func (d *db) GetLetsEncryptNodeID() (string, error) {
 	var nodeID = new(string)
 
 	// there is always only one letsencrypt node
-	if err := d.db.QueryRowContext(
+	err := d.db.QueryRowContext(
 		context.Background(),
-		"SELECT container_id FROM letsencrypt WHERE id = 1;").
-		Scan(nodeID); err != nil {
+		"SELECT container_id FROM letsencrypt").
+		Scan(nodeID)
+
+	switch {
+	case err == sql.ErrNoRows:
+		d.log.Debug("No rows in letsencrypt container_id")
+	case err != nil:
 		return "", err
 	}
-	
+
 	return *nodeID, nil
+}
+
+func (d *db) RemoveLetsEncryptInfo(nodeId string) error {
+	stmt, err := d.db.Prepare("DELETE FROM letsencrypt WHERE container_id = ?")
+	if err != nil {
+		return fmt.Errorf("could not prepare delete letsencrypt node: %w", err)
+	}
+
+	_, err = stmt.Exec(nodeId)
+	if err != nil {
+		return fmt.Errorf("could not execute delete letsencrypt statement: %w", err)
+	}
+
+	d.log.Debug("LetsEncrypt data deleted")
+
+	return nil
 }
 
 func (d *db) RemoveSbcInfo(sbcFqdn string) error {
@@ -152,6 +175,7 @@ func (d *db) RemoveSbcInfo(sbcFqdn string) error {
 
 	return nil
 }
+
 func (d *db) GetContainerIDsFromSbcFqdn(sbcFqdn string) []string {
 	stmt, err := d.db.Prepare(
 		"SELECT k.container_id, r.container_id " +
@@ -182,12 +206,7 @@ func (d *db) GetContainerIDsFromSbcFqdn(sbcFqdn string) []string {
 }
 
 func (d *db) SaveContainerID(rowID int64, tableName, containerID string) error {
-	stmt, err := d.db.Prepare(fmt.Sprintf("UPDATE %s SET container_id = ? WHERE id = ?", tableName))
-	if err != nil {
-		return fmt.Errorf("could not prepare insert statement: %w", err)
-	}
-
-	row, err := stmt.Exec(containerID, rowID)
+	row, err := d.insertOrUpdateContainerID(rowID, tableName, containerID)
 	if err != nil {
 		return fmt.Errorf("could not execute prepared insert statement: %w", err)
 	}
@@ -361,7 +380,7 @@ func (d *db) storeSbcInfo() error {
 	return nil
 }
 
-func (d *db) GetSBCParameters(sbcId int64) (Sbc, error) {
+func (d *db) GetSBCParameters(sbcId int64) (types.Sbc, error) {
 	stmt, err := d.db.Prepare(
 		"SELECT " +
 			"fqdn, sbc_name, sbc_tls_port, sbc_udp_port, " +
@@ -372,15 +391,15 @@ func (d *db) GetSBCParameters(sbcId int64) (Sbc, error) {
 			"JOIN rtp_engine re ON re.id = sbc_info.rtp_engine_id " +
 			"WHERE sbc_info.id == ?")
 	if err != nil {
-		return Sbc{}, fmt.Errorf("could not prepare select statement err=%w", err)
+		return types.Sbc{}, fmt.Errorf("could not prepare select statement err=%w", err)
 	}
 
 	res, err := stmt.Query(sbcId)
 	if err != nil {
-		return Sbc{}, fmt.Errorf("could not run query for select statement err=%w", err)
+		return types.Sbc{}, fmt.Errorf("could not run query for select statement err=%w", err)
 	}
 
-	sbcResult := Sbc{}
+	sbcResult := types.Sbc{}
 
 	for res.Next() {
 		if err := res.Scan(
@@ -398,7 +417,7 @@ func (d *db) GetSBCParameters(sbcId int64) (Sbc, error) {
 			&sbcResult.NewConfig,
 			&sbcResult.EnableSipDump,
 		); err != nil {
-			return Sbc{}, fmt.Errorf("could not scan data into struct err=%w", err)
+			return types.Sbc{}, fmt.Errorf("could not scan data into struct err=%w", err)
 		}
 
 	}

@@ -1,17 +1,20 @@
 package db
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"os"
 	"strconv"
 
-	"github.com/ZeljkoBenovic/tsbc/cmd/flagnames"
+	"github.com/ZeljkoBenovic/tsbc/cmd/helpers/flagnames"
+	"github.com/hashicorp/go-hclog"
 	"github.com/spf13/viper"
 )
 
 func (d *db) getSingleRecordAndIncreaseByValue(increaseValue int, columnName, tableName string) string {
 	// get the latest row with the requested column name
-	stmt, err := d.db.Prepare(fmt.Sprintf("SELECT %s FROM %s ORDER BY id DESC LIMIT 1;", columnName, tableName))
+	stmt, err := d.db.Prepare(fmt.Sprintf("SELECT %s FROM %s ORDER BY id DESC LIMIT 1", columnName, tableName))
 	if err != nil {
 		d.log.Error("Could not prepare select statement", "err", err)
 		os.Exit(1)
@@ -104,4 +107,56 @@ func (d *db) deleteRowWithID(tableName string, insertID int64) {
 	}
 
 	d.log.Info("Record deleted successfully", "table", tableName, "deleted_rows", rowsAffected)
+}
+
+// insertOrUpdateContainerID checks if the rowID already exists in the database and prepares and executes the statement.
+// Needed to be done in order to handle LetsEncrypt node database record after it has been deleted.
+func (d *db) insertOrUpdateContainerID(rowID int64, tableName, containerID string) (sql.Result, error) {
+	var (
+		tableId = new(int64)
+		stmt    = new(sql.Stmt)
+		result  sql.Result
+		err     error
+	)
+	// check if this rowID exists in the database
+	err = d.db.QueryRowContext(
+		context.Background(),
+		fmt.Sprintf("SELECT id FROM %s WHERE id = %d", tableName, rowID)).
+		Scan(tableId)
+
+	switch {
+	case err == sql.ErrNoRows:
+		stmt, err = d.db.Prepare(fmt.Sprintf("INSERT INTO %s (container_id) VALUES(?)", tableName))
+		if err != nil {
+			return nil, err
+		}
+
+		result, err = stmt.Exec(containerID)
+
+	case err != nil:
+		return nil, fmt.Errorf("could not run InsertOrUpdate: %w", err)
+
+	default:
+		stmt, err = d.db.Prepare(fmt.Sprintf("UPDATE %s SET container_id = ? WHERE id = ?", tableName))
+		if err != nil {
+			return nil, err
+		}
+
+		result, err = stmt.Exec(containerID, rowID)
+	}
+
+	return result, nil
+}
+
+func DefaultDBLocation() string {
+	logger := hclog.New(hclog.DefaultOptions)
+	// get user home dir
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		logger.Error("Could not get user home directory, setting sbc.db to local folder", "err", err)
+		return "./tsbc/sbc.db"
+	}
+
+	// return default DB location
+	return homeDir + "/.tsbc/sbc.db"
 }

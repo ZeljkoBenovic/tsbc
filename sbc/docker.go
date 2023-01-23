@@ -4,11 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/ZeljkoBenovic/tsbc/cmd/flagnames"
+	"github.com/ZeljkoBenovic/tsbc/cmd/helpers/flagnames"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
@@ -18,9 +17,9 @@ import (
 type ContainerName int
 
 const (
-	Kamailio ContainerName = iota
-	RtpEngine
-	LetsEncrypt
+	KamailioContainer ContainerName = iota
+	RtpEngineContainer
+	LetsEncryptContainer
 )
 
 var ErrContainerNameNotSupported = errors.New("selected container type not supported")
@@ -46,11 +45,17 @@ func (s *sbc) removeLetsEncryptNode() error {
 	}
 
 	if nodeID != "" {
+		// remove container
 		if err = s.dockerCl.ContainerRemove(s.ctx, nodeID, types.ContainerRemoveOptions{
 			Force:         true,
 			RemoveVolumes: true,
 		}); err != nil {
 			return fmt.Errorf("could not remove letsencrypt container: %w", err)
+		}
+
+		// remove database entry
+		if err = s.db.RemoveLetsEncryptInfo(nodeID); err != nil {
+			return fmt.Errorf("could not remove letsencrypt database info: %w", err)
 		}
 	}
 
@@ -63,8 +68,6 @@ func (s *sbc) createAndRunLetsEncrypt(fqdnNames []string) error {
 		return err
 	}
 
-	// TODO: modify certs location in kamailio container so that we don't need to create links
-
 	firstFqdnSplitByDot := strings.Split(fqdnNames[0], ".")
 
 	extraDomains := ""
@@ -75,18 +78,16 @@ func (s *sbc) createAndRunLetsEncrypt(fqdnNames []string) error {
 	envVars := []string{
 		fmt.Sprintf("PUID=1000"),
 		fmt.Sprintf("PGID=1000"),
-		// TODO: sould be defined from flags
-		fmt.Sprintf("TZ=Europe/Belgrade"),
+		fmt.Sprintf(fmt.Sprintf("TZ=%s", viper.GetString(flagnames.Timezone))),
 		fmt.Sprintf("VALIDATION=http"),
 		fmt.Sprintf("URL=%s", firstFqdnSplitByDot[1]+"."+firstFqdnSplitByDot[2]),
 		fmt.Sprintf("SUBDOMAINS=%s", firstFqdnSplitByDot[0]),
 		fmt.Sprintf("ONLY_SUBDOMAINS=true"),
 		fmt.Sprintf("EXTRA_DOMAINS=%s", extraDomains),
-		// TODO: should be defined from flags
-		fmt.Sprintf("STAGING=true"),
+		fmt.Sprintf(fmt.Sprintf("STAGING=%s", viper.GetString(flagnames.Staging))),
 	}
 
-	if err := s.createAndRunContainer(LetsEncrypt, envVars); err != nil {
+	if err := s.createAndRunContainer(LetsEncryptContainer, envVars); err != nil {
 		return err
 	}
 
@@ -131,11 +132,11 @@ func (s *sbc) createAndRunSbcInfra() error {
 		fmt.Sprintf("RTP_ENG_PORT=%s", s.sbcData.RtpEnginePort),
 	}
 
-	if err := s.createAndRunContainer(RtpEngine, rtpEngEnvVars); err != nil {
+	if err = s.createAndRunContainer(RtpEngineContainer, rtpEngEnvVars); err != nil {
 		return fmt.Errorf("could not run rtp-engine container err=%w", err)
 	}
 
-	if err := s.createAndRunContainer(Kamailio, kamailioEnvVars); err != nil {
+	if err = s.createAndRunContainer(KamailioContainer, kamailioEnvVars); err != nil {
 		return fmt.Errorf("could not run kamailio container err=%w", err)
 	}
 
@@ -162,7 +163,7 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 	}
 
 	switch contName {
-	case Kamailio:
+	case KamailioContainer:
 		containerParams.imageName = viper.GetString(flagnames.KamailioImage)
 		containerParams.containerName = s.sbcData.SbcName + "-kamailio"
 		containerParams.dbTableName = "kamailio"
@@ -185,7 +186,7 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 				Target: "/cert",
 			},
 		}
-	case RtpEngine:
+	case RtpEngineContainer:
 		containerParams.imageName = viper.GetString(flagnames.RtpImage)
 		containerParams.containerName = s.sbcData.SbcName + "-rtp-engine"
 		containerParams.dbTableName = "rtp_engine"
@@ -197,7 +198,7 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 				Target: "/tmp",
 			},
 		}
-	case LetsEncrypt:
+	case LetsEncryptContainer:
 		containerParams.imageName = "linuxserver/swag"
 		containerParams.containerName = "certificates-handler"
 		containerParams.dbTableName = "letsencrypt"
@@ -217,15 +218,14 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 
 	reader, err := s.dockerCl.ImagePull(s.ctx, containerParams.imageName, types.ImagePullOptions{})
 	if err != nil {
-		s.logger.Error("Could not pull Kamailio docker image", "image", containerParams.imageName, "err", err)
+		s.logger.Error("Could not pull docker image", "image", containerParams.imageName, "err", err)
 
 		return err
 	}
 
 	defer reader.Close()
-	// TODO: output docker logs to a log file
-	// output logs to console
-	io.Copy(os.Stdout, reader)
+	// output logs to log file
+	_, err = io.Copy(s.dockerLogFile, reader)
 
 	resp, err := s.dockerCl.ContainerCreate(s.ctx, &container.Config{
 		Image: containerParams.imageName,
@@ -244,7 +244,7 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 		return err
 	}
 
-	if contName == Kamailio {
+	if contName == KamailioContainer {
 		s.logger.Info("Starting kamailio...")
 		s.logger.Debug("Sleeping kamailio container deployment due to the certificate generation")
 		time.Sleep(30 * time.Second)

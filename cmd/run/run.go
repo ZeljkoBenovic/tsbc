@@ -1,9 +1,11 @@
 package run
 
 import (
+	"fmt"
 	"log"
 
-	"github.com/ZeljkoBenovic/tsbc/cmd/flagnames"
+	"github.com/ZeljkoBenovic/tsbc/cmd/helpers/flagnames"
+	"github.com/ZeljkoBenovic/tsbc/db"
 	"github.com/ZeljkoBenovic/tsbc/sbc"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -28,6 +30,10 @@ func GetCmd() *cobra.Command {
 	runCmd.Flags().String(flagnames.SbcFqdn, "", "fqdn that Kamailio will advertise")
 	runCmd.Flags().String(flagnames.HostIP, "", "the static lan ip address of the docker host")
 	runCmd.Flags().String(flagnames.LogLevel, "info", "log output level")
+	runCmd.Flags().String(flagnames.LogFileLocation, "", "log file location")
+	runCmd.Flags().String(flagnames.DockerLogFileLocation, "/var/log/tsbc/docker.log", "docker log file location")
+	runCmd.Flags().String(flagnames.DBFileLocation, "",
+		fmt.Sprintf("sqlite file location, file name must end with .db (default: %s)", db.DefaultDBLocation()))
 	// kamailio flags
 	runCmd.Flags().Bool(flagnames.KamailioNewConfig, true, "generate new config file for Kamailio")
 	runCmd.Flags().Bool(flagnames.KamailioSipDump, false, "enable sip capture for Kamailio")
@@ -43,6 +49,9 @@ func GetCmd() *cobra.Command {
 	runCmd.Flags().String(flagnames.RtpPublicIp, "", "public ip for RTP transport")
 	runCmd.Flags().String(flagnames.RtpSignalPort, "20001", "port used to communicate with Kamailio")
 	runCmd.Flags().String(flagnames.RtpImage, "zeljkoiphouse/rtpengine:latest", "rtp engine docker image name")
+	// letsencrypt flags
+	runCmd.Flags().String(flagnames.Timezone, "Europe/Belgrade", "set the timezone")
+	runCmd.Flags().String(flagnames.Staging, "false", "set staging environment for LetsEncrypt node")
 
 	_ = runCmd.MarkFlagRequired(flagnames.SbcFqdn)
 	_ = runCmd.MarkFlagRequired(flagnames.RtpPublicIp)
