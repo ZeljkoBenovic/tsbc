@@ -119,7 +119,7 @@ func (s *sbc) createAndRunSbcInfra() error {
 	// environment variables for Kamailio container
 	kamailioEnvVars := []string{
 		fmt.Sprintf("NEW_CONFIG=%t", s.sbcData.NewConfig),
-		fmt.Sprintf("EN_DUMP=%t", s.sbcData.EnableSipDump),
+		fmt.Sprintf("EN_SIPDUMP=%t", s.sbcData.EnableSipDump),
 		fmt.Sprintf("ADVERTISE_IP=%s", s.sbcData.SbcName),
 		fmt.Sprintf("ALIAS=%s", s.sbcData.SbcName),
 		fmt.Sprintf("SBC_NAME=%s", s.sbcData.SbcName),
@@ -280,9 +280,18 @@ func (s *sbc) handleSipDumpVolume() mount.Mount {
 			currentDir = "/tmp"
 		}
 
+		bindPath := currentDir + "/sipdump/" + s.sbcData.SbcName
+		if err = os.MkdirAll(bindPath, 755); err != nil {
+			s.logger.Error("Could not create directory using regular docker volume",
+				"dir", bindPath, "err", err)
+
+			// if the folder creation fails create just the regular volume mount
+			return sipDumpMount
+		}
+
 		sipDumpMount = mount.Mount{
 			Type:   mount.TypeBind,
-			Source: currentDir + "/sipdump/" + s.sbcData.SbcName,
+			Source: bindPath,
 			Target: "/tmp",
 		}
 	}
