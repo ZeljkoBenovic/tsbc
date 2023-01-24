@@ -25,7 +25,7 @@ to quickly create a Cobra application.`,
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	//TODO: add restart and list (sbcs) command
+	// TODO: add restart and list (sbcs) command
 	rootCmd.AddCommand(
 		run.GetCmd(),
 		destroy.GetCmd(),

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -175,17 +176,15 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 				Target: "/etc/kamailio",
 			},
 			{
-				// TODO: convert to bind mount as the user needs to be able to see dumps
-				Type:   mount.TypeVolume,
-				Source: s.sbcData.SbcName + "-sipdump",
-				Target: "/tmp",
-			},
-			{
 				Type:   mount.TypeVolume,
 				Source: "certificates",
 				Target: "/cert",
 			},
 		}
+		containerParams.dockerDefaultHostConfig.Mounts = append(
+			containerParams.dockerDefaultHostConfig.Mounts,
+			s.handleSipDumpVolume())
+
 	case RtpEngineContainer:
 		containerParams.imageName = viper.GetString(flagnames.RtpImage)
 		containerParams.containerName = s.sbcData.SbcName + "-rtp-engine"
@@ -198,6 +197,7 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 				Target: "/tmp",
 			},
 		}
+
 	case LetsEncryptContainer:
 		containerParams.imageName = "linuxserver/swag"
 		containerParams.containerName = "certificates-handler"
@@ -212,6 +212,7 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 				Target: "/config/etc/letsencrypt",
 			},
 		}
+
 	default:
 		return ErrContainerNameNotSupported
 	}
@@ -262,4 +263,29 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 		"container_id", resp.ID)
 
 	return nil
+}
+
+// handleSipDumpVolume returns a bind mount or regular docker volume based on sip-dump flag
+func (s *sbc) handleSipDumpVolume() mount.Mount {
+	sipDumpMount := mount.Mount{
+		Type:   mount.TypeVolume,
+		Source: s.sbcData.SbcName + "-sipdump",
+		Target: "/tmp",
+	}
+
+	if s.sbcData.EnableSipDump {
+		currentDir, err := os.Getwd()
+		if err != nil {
+			s.logger.Debug("Could not get current working directory, setting path to /tmp")
+			currentDir = "/tmp"
+		}
+
+		sipDumpMount = mount.Mount{
+			Type:   mount.TypeBind,
+			Source: currentDir + "/sipdump/" + s.sbcData.SbcName,
+			Target: "/tmp",
+		}
+	}
+
+	return sipDumpMount
 }

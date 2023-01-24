@@ -48,7 +48,6 @@ func NewSBC() (ISBC, error) {
 		return nil, fmt.Errorf("could not create docker log file: %w", err)
 	}
 
-	// TODO: logger configurability options
 	// create new logger instance
 	lg := hclog.New(&hclog.LoggerOptions{
 		Name:                 "sbc",
