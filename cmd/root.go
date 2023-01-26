@@ -5,6 +5,8 @@ import (
 	"log"
 
 	"github.com/ZeljkoBenovic/tsbc/cmd/destroy"
+	"github.com/ZeljkoBenovic/tsbc/cmd/recreate"
+	"github.com/ZeljkoBenovic/tsbc/cmd/restart"
 	"github.com/ZeljkoBenovic/tsbc/cmd/run"
 	"github.com/spf13/cobra"
 )
@@ -29,6 +31,8 @@ func Execute() {
 	rootCmd.AddCommand(
 		run.GetCmd(),
 		destroy.GetCmd(),
+		restart.GetCmd(),
+		recreate.GetCmd(),
 	)
 
 	err := rootCmd.Execute()

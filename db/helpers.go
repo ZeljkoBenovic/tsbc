@@ -134,7 +134,8 @@ func (d *db) insertOrUpdateContainerID(rowID int64, tableName, containerID strin
 		result, err = stmt.Exec(containerID)
 
 	case err != nil:
-		return nil, fmt.Errorf("could not run InsertOrUpdate: %w", err)
+		result = nil
+		err = fmt.Errorf("could not run InsertOrUpdate: %w", err)
 
 	default:
 		stmt, err = d.db.Prepare(fmt.Sprintf("UPDATE %s SET container_id = ? WHERE id = ?", tableName))
@@ -145,7 +146,7 @@ func (d *db) insertOrUpdateContainerID(rowID int64, tableName, containerID strin
 		result, err = stmt.Exec(containerID, rowID)
 	}
 
-	return result, nil
+	return result, err
 }
 
 func DefaultDBLocation() string {

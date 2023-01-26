@@ -11,18 +11,12 @@ import (
 	"github.com/spf13/viper"
 )
 
-// TODO: fix long description
 // runCmd represents the run command
 var runCmd = &cobra.Command{
-	Use:   "run",
-	Short: "run new sbc instance",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
-	Run: runCommandHandler,
+	Use:     "run",
+	Short:   "Command used to deploy a new SBC cluster",
+	Run:     runCommandHandler,
+	Example: "tsbc run --kamailio-pbx-ip 192.168.1.1 --sbc-fqdn sbc.test1.com --rtp-public-ip 1.1.1.1  --host-ip 192.168.10.1",
 }
 
 func GetCmd() *cobra.Command {
@@ -72,6 +66,8 @@ func runCommandHandler(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Fatalln("Could not create sbc instance err=", err.Error())
 	}
+
+	defer sbcInstance.Close()
 
 	sbcInstance.Run()
 }

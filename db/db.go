@@ -21,8 +21,9 @@ type IDB interface {
 	SaveContainerID(rowID int64, tableName, id string) error
 
 	GetSBCParameters(sbcId int64) (types.Sbc, error)
-	GetKamailioInsertID() int64
-	GetRTPEngineInsertID() int64
+	GetSBCIdFromFqdn(sbcFqdn string) int64
+	GetKamailioInsertID(sbcFqdn string) int64
+	GetRTPEngineInsertID(sbcFqdn string) int64
 	GetContainerIDsFromSbcFqdn(sbcFqdn string) []string
 	GetAllFqdnNames() ([]string, error)
 	GetLetsEncryptNodeID() (string, error)
@@ -77,11 +78,37 @@ func (d *db) Close() error {
 	return nil
 }
 
-func (d *db) GetKamailioInsertID() int64 {
+func (d *db) GetKamailioInsertID(sbcFqdn string) int64 {
+	var id int64 = 0
+
+	if err := d.db.QueryRowContext(
+		context.Background(),
+		"SELECT kamailio_id FROM sbc_info WHERE fqdn=?", sbcFqdn).
+		Scan(&id); err != nil {
+		d.log.Error("Could not get kamailio_id", "err", err)
+	}
+
+	if id != 0 {
+		d.insertID.kamailio = id
+	}
+
 	return d.insertID.kamailio
 }
 
-func (d *db) GetRTPEngineInsertID() int64 {
+func (d *db) GetRTPEngineInsertID(sbcFqdn string) int64 {
+	var id int64 = 0
+
+	if err := d.db.QueryRowContext(
+		context.Background(),
+		"SELECT rtp_engine_id FROM sbc_info WHERE fqdn=?", sbcFqdn).
+		Scan(&id); err != nil {
+		d.log.Error("Could not get rtp_engine_id", "err", err)
+	}
+
+	if id != 0 {
+		d.insertID.rtpEngine = id
+	}
+
 	return d.insertID.rtpEngine
 }
 
@@ -223,102 +250,6 @@ func (d *db) RevertLastInsert() {
 	d.deleteRowWithID("rtp_engine", d.insertID.rtpEngine)
 }
 
-func (d *db) CreateFreshDB() error {
-	var err error
-
-	// check if there is data in the table already
-	tableExists, err := d.checkIfTableExists("sbc_info")
-	if err != nil {
-		return fmt.Errorf("error while checking if table already exists err=%w", err)
-	}
-
-	if tableExists {
-		d.log.Debug("Table already exists, skipping new schema generation", "table", "sbc_info")
-
-		// return nil as this is not an error, and we want the rest of the program to continue
-		return nil
-	}
-
-	// TODO: set appropriate types
-	schema := `create table kamailio
-(
-    id              INTEGER
-        constraint kamailio_pk
-            primary key autoincrement,
-    new_config      INTEGER default 0,
-    enable_sipdump  INTEGER default 0,
-    sbc_name        TEXT not null,
-    sbc_tls_port    TEXT not null,
-    sbc_udp_port    TEXT not null,
-    pbx_ip          TEXT not null,
-    pbx_port        TEXT not null,
-    rtp_engine_port TEXT not null,
-	container_id    TEXT DEFAULT null
-);
-
-create unique index kamailio_id_uindex
-    on kamailio (id);
-
-create unique index kamailio_rtp_engine_port_uindex
-    on kamailio (rtp_engine_port);
-
-create unique index kamailio_sbc_name_uindex
-    on kamailio (sbc_name);
-
-create unique index kamailio_sbc_tls_port_uindex
-    on kamailio (sbc_tls_port);
-
-create unique index kamailio_sbc_udp_port_uindex
-    on kamailio (sbc_udp_port);
-
-create table rtp_engine
-(
-    id              INTEGER
-        constraint rtp_engine_pk
-            primary key autoincrement,
-    rtp_max         TEXT not null,
-    rtp_min         TEXT not null,
-    media_public_ip TEXT not null,
-    ng_listen       TEXT not null,
-	container_id    TEXT default null
-);
-
-create table letsencrypt
-(
-    id INTEGER primary key autoincrement,
-    container_id    TEXT not null
-);
-/*insert dummy data into letsencrypt as it will get overridden*/
-INSERT INTO letsencrypt (container_id) VALUES ('');
-                                                   
-create table sbc_info
-(
-    id            INTEGER
-        primary key autoincrement,
-    fqdn          TEXT not null,
-    created       DATE not null,
-    kamailio_id   INTEGER not null
-        references kamailio 
-            on delete cascade,
-    rtp_engine_id INTEGER not null
-        references rtp_engine 
-            on delete cascade
-);`
-
-	d.log.Debug("Creating new db schema")
-
-	_, err = d.db.Exec(schema)
-	if err != nil {
-		d.log.Error("Could run create schema query", "err", err)
-
-		return err
-	}
-
-	d.log.Debug("New db schema created")
-
-	return nil
-}
-
 func (d *db) SaveSBCInformation() (int64, error) {
 	var err error
 
@@ -378,6 +309,18 @@ func (d *db) storeSbcInfo() error {
 	d.log.Debug("SBC configuration inserted", "insert_id", d.insertID.sbcInstance)
 
 	return nil
+}
+
+func (d *db) GetSBCIdFromFqdn(sbcFqdn string) int64 {
+	var sbcID int64
+
+	if err := d.db.QueryRowContext(
+		context.Background(),
+		"SELECT id FROM sbc_info WHERE fqdn = ?", sbcFqdn).Scan(&sbcID); err != nil {
+		d.log.Error("Could not get sbc id", "fqdn", sbcFqdn, "err", err)
+	}
+
+	return sbcID
 }
 
 func (d *db) GetSBCParameters(sbcId int64) (types.Sbc, error) {

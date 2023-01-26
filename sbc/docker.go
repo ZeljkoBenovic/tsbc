@@ -168,7 +168,7 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 		containerParams.imageName = viper.GetString(flagnames.KamailioImage)
 		containerParams.containerName = s.sbcData.SbcName + "-kamailio"
 		containerParams.dbTableName = "kamailio"
-		containerParams.rowID = s.db.GetKamailioInsertID()
+		containerParams.rowID = s.db.GetKamailioInsertID(s.sbcData.SbcName)
 		containerParams.dockerDefaultHostConfig.Mounts = []mount.Mount{
 			{
 				Type:   mount.TypeVolume,
@@ -189,7 +189,7 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 		containerParams.imageName = viper.GetString(flagnames.RtpImage)
 		containerParams.containerName = s.sbcData.SbcName + "-rtp-engine"
 		containerParams.dbTableName = "rtp_engine"
-		containerParams.rowID = s.db.GetRTPEngineInsertID()
+		containerParams.rowID = s.db.GetRTPEngineInsertID(s.sbcData.SbcName)
 		containerParams.dockerDefaultHostConfig.Mounts = []mount.Mount{
 			{
 				Type:   mount.TypeVolume,
