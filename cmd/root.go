@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/ZeljkoBenovic/tsbc/cmd/destroy"
+	"github.com/ZeljkoBenovic/tsbc/cmd/list"
 	"github.com/ZeljkoBenovic/tsbc/cmd/recreate"
 	"github.com/ZeljkoBenovic/tsbc/cmd/restart"
 	"github.com/ZeljkoBenovic/tsbc/cmd/run"
@@ -33,6 +34,7 @@ func Execute() {
 		destroy.GetCmd(),
 		restart.GetCmd(),
 		recreate.GetCmd(),
+		list.GetCmd(),
 	)
 
 	err := rootCmd.Execute()

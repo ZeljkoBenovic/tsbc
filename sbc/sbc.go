@@ -19,6 +19,7 @@ type ISBC interface {
 	Recreate(fqdnName string) error
 	Destroy(fqdnName string) error
 	DestroyLetsEncryptNode() error
+	List() ([]types.Sbc, error)
 
 	Close()
 }
