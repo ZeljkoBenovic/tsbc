@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -49,8 +50,8 @@ func (d *db) getSingleRecordAndIncreaseByValue(increaseValue int, columnName, ta
 
 func checkForRequiredFlags() error {
 	// pbx ip can not be undefined
-	if viper.GetString(flagnames.KamailioPbxIp) == "" {
-		return ErrPbxIpNotDefined
+	if viper.GetString(flagnames.KamailioPbxIP) == "" {
+		return ErrPbxIPNotDefined
 	}
 
 	// sbc name can not be undefined
@@ -60,8 +61,8 @@ func checkForRequiredFlags() error {
 
 	// TODO: add checks for valid IP address format
 	// public ip address must be defined
-	if viper.GetString(flagnames.RtpPublicIp) == "" {
-		return ErrRtpEnginePublicIPNotDefined
+	if viper.GetString(flagnames.RTPPublicIP) == "" {
+		return ErrRTPEnginePublicIPNotDefined
 	}
 
 	return nil
@@ -91,18 +92,21 @@ func (d *db) deleteRowWithID(tableName string, insertID int64) {
 	stmt, err := d.db.Prepare(fmt.Sprintf("DELETE FROM %s WHERE id = ?", tableName))
 	if err != nil {
 		d.log.Error("Could not prepare delete statement", "table", tableName, "err", err)
+
 		return
 	}
 
 	res, err := stmt.Exec(insertID)
 	if err != nil {
 		d.log.Error("Could not execute delete statement", "table", tableName, "err", err)
+
 		return
 	}
 
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
 		d.log.Error("Could not get affected rows", "table", tableName, "err", err)
+
 		return
 	}
 
@@ -113,7 +117,7 @@ func (d *db) deleteRowWithID(tableName string, insertID int64) {
 // Needed to be done in order to handle LetsEncrypt node database record after it has been deleted.
 func (d *db) insertOrUpdateContainerID(rowID int64, tableName, containerID string) (sql.Result, error) {
 	var (
-		tableId = new(int64)
+		tableID = new(int64)
 		stmt    = new(sql.Stmt)
 		result  sql.Result
 		err     error
@@ -122,10 +126,10 @@ func (d *db) insertOrUpdateContainerID(rowID int64, tableName, containerID strin
 	err = d.db.QueryRowContext(
 		context.Background(),
 		fmt.Sprintf("SELECT id FROM %s WHERE id = %d", tableName, rowID)).
-		Scan(tableId)
+		Scan(tableID)
 
 	switch {
-	case err == sql.ErrNoRows:
+	case errors.Is(err, sql.ErrNoRows):
 		stmt, err = d.db.Prepare(fmt.Sprintf("INSERT INTO %s (container_id) VALUES(?)", tableName))
 		if err != nil {
 			return nil, err
@@ -155,6 +159,7 @@ func DefaultDBLocation() string {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		logger.Error("Could not get user home directory, setting sbc.db to local folder", "err", err)
+
 		return "./tsbc/sbc.db"
 	}
 

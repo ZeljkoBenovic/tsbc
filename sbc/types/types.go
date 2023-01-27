@@ -3,7 +3,7 @@ package types
 type Sbc struct {
 	Fqdn string
 	Kamailio
-	RtpEngine
+	RTPEngine
 
 	LogFileLocation       string
 	DockerLogFileLocation string
@@ -12,18 +12,18 @@ type Sbc struct {
 
 type Kamailio struct {
 	NewConfig     bool
-	EnableSipDump bool
+	EnableSIPDump bool
 	SbcName       string
 	SbcTLSPort    string
 	SbcUDPPort    string
 	PbxIP         string
 	PbxPort       string
-	RtpEnginePort string
+	RTPEnginePort string
 }
 
-type RtpEngine struct {
-	RtpMaxPort    string
-	RtpMinPort    string
+type RTPEngine struct {
+	RTPMaxPort    string
+	RTPMinPort    string
 	MediaPublicIP string
 	NgListen      string
 }

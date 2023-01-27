@@ -8,7 +8,7 @@ import (
 
 func (s *sbc) List() ([]types.Sbc, error) {
 	var (
-		sbcsInfo []types.Sbc
+		sbcsInfo = make([]types.Sbc, 0)
 		sbcInfo  types.Sbc
 		err      error
 	)

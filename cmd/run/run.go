@@ -13,10 +13,11 @@ import (
 
 // runCmd represents the run command
 var runCmd = &cobra.Command{
-	Use:     "run",
-	Short:   "Command used to deploy a new SBC cluster",
-	Run:     runCommandHandler,
-	Example: "tsbc run --kamailio-pbx-ip 192.168.1.1 --sbc-fqdn sbc.test1.com --rtp-public-ip 1.1.1.1  --host-ip 192.168.10.1",
+	Use:   "run",
+	Short: "Command used to deploy a new SBC cluster",
+	Run:   runCommandHandler,
+	Example: "tsbc run --kamailio-pbx-ip 192.168.1.1 " +
+		"--sbc-fqdn sbc.test1.com --rtp-public-ip 1.1.1.1  --host-ip 192.168.10.1",
 }
 
 func GetCmd() *cobra.Command {
@@ -30,26 +31,26 @@ func GetCmd() *cobra.Command {
 		fmt.Sprintf("sqlite file location, file name must end with .db (default: %s)", db.DefaultDBLocation()))
 	// kamailio flags
 	runCmd.Flags().Bool(flagnames.KamailioNewConfig, true, "generate new config file for Kamailio")
-	runCmd.Flags().Bool(flagnames.KamailioSipDump, false, "enable sip capture for Kamailio")
+	runCmd.Flags().Bool(flagnames.KamailioSIPDump, false, "enable sip capture for Kamailio")
 	runCmd.Flags().String(flagnames.KamailioSbcPort, "5061", "sbc tls port that will be advertised to MS Teams")
-	runCmd.Flags().String(flagnames.KamailioUdpSipPort, "5060", "sbc udp port that will be advertised to internal PBX")
-	runCmd.Flags().String(flagnames.KamailioPbxIp, "", "ip address of internal PBX")
+	runCmd.Flags().String(flagnames.KamailioUDPSIPPort, "5060", "sbc udp port that will be advertised to internal PBX")
+	runCmd.Flags().String(flagnames.KamailioPbxIP, "", "ip address of internal PBX")
 	runCmd.Flags().String(flagnames.KamailioPbxPort, "5060", "sip port of internal PBX")
-	runCmd.Flags().String(flagnames.KamailioRtpEngPort, "20001", "rtp engine signalisation port")
+	runCmd.Flags().String(flagnames.KamailioRTPEngPort, "20001", "rtp engine signalisation port")
 	runCmd.Flags().String(flagnames.KamailioImage, "zeljkoiphouse/kamailio:v0.2", "kamailio docker image name")
 	// rtp engine flags
-	runCmd.Flags().String(flagnames.RtpMinPort, "20501", "start port for RTP")
-	runCmd.Flags().String(flagnames.RtpMaxPort, "21000", "end port for RTP")
-	runCmd.Flags().String(flagnames.RtpPublicIp, "", "public ip for RTP transport")
-	runCmd.Flags().String(flagnames.RtpSignalPort, "20001", "port used to communicate with Kamailio")
-	runCmd.Flags().String(flagnames.RtpImage, "zeljkoiphouse/rtpengine:latest", "rtp engine docker image name")
+	runCmd.Flags().String(flagnames.RTPMinPort, "20501", "start port for RTP")
+	runCmd.Flags().String(flagnames.RTPMaxPort, "21000", "end port for RTP")
+	runCmd.Flags().String(flagnames.RTPPublicIP, "", "public ip for RTP transport")
+	runCmd.Flags().String(flagnames.RTPSignalPort, "20001", "port used to communicate with Kamailio")
+	runCmd.Flags().String(flagnames.RTPImage, "zeljkoiphouse/rtpengine:latest", "rtp engine docker image name")
 	// letsencrypt flags
 	runCmd.Flags().String(flagnames.Timezone, "Europe/Belgrade", "set the timezone")
 	runCmd.Flags().String(flagnames.Staging, "false", "set staging environment for LetsEncrypt node")
 
 	_ = runCmd.MarkFlagRequired(flagnames.SbcFqdn)
-	_ = runCmd.MarkFlagRequired(flagnames.RtpPublicIp)
-	_ = runCmd.MarkFlagRequired(flagnames.KamailioPbxIp)
+	_ = runCmd.MarkFlagRequired(flagnames.RTPPublicIP)
+	_ = runCmd.MarkFlagRequired(flagnames.KamailioPbxIP)
 	_ = runCmd.MarkFlagRequired(flagnames.HostIP)
 
 	// bind flags to viper

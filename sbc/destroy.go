@@ -33,7 +33,7 @@ func (s *sbc) Destroy(fqdnName string) error {
 	s.logger.Info("Containers destroyed successfully")
 
 	if err := s.db.RemoveSbcInfo(viper.GetString("destroy.fqdn")); err != nil {
-		return fmt.Errorf("sould not remove sbc info from database: %w", err)
+		return fmt.Errorf("should not remove sbc info from database: %w", err)
 	}
 
 	s.logger.Info("Database information deleted")
@@ -63,6 +63,7 @@ func (s *sbc) destroyContainerWithVolumes(containerID string) error {
 		if vol.Name == "certificates" && !viper.GetBool("destroy.tls-node") {
 			continue
 		}
+
 		if err = s.dockerCl.VolumeRemove(s.ctx, vol.Name, true); err != nil {
 			s.logger.Error("Could not delete volume", "name", vol.Name, "err", err)
 		}
@@ -75,18 +76,18 @@ func (s *sbc) destroyContainerWithVolumes(containerID string) error {
 
 func (s *sbc) DestroyLetsEncryptNode() error {
 	// get LetsEncrypt node ID
-	nodeId, err := s.db.GetLetsEncryptNodeID()
+	nodeID, err := s.db.GetLetsEncryptNodeID()
 	if err != nil {
 		return fmt.Errorf("could not get LetsEncrypt node id: %w", err)
 	}
 
 	// and destroy that node
-	if err = s.destroyContainerWithVolumes(nodeId); err != nil {
+	if err = s.destroyContainerWithVolumes(nodeID); err != nil {
 		s.logger.Error("Could not destroy LetsEncrypt node", "err", err)
 	}
 
 	// delete database records
-	if err = s.db.RemoveLetsEncryptInfo(nodeId); err != nil {
+	if err = s.db.RemoveLetsEncryptInfo(nodeID); err != nil {
 		return fmt.Errorf("could not remove LetsEncrypt node: %w", err)
 	}
 

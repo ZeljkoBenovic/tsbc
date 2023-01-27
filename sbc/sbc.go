@@ -48,7 +48,9 @@ func NewSBC() (ISBC, error) {
 	var err error
 
 	// create docker log file
-	sbcInst.dockerLogFile, err = os.OpenFile(sbcInst.sbcData.DockerLogFileLocation, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	sbcInst.dockerLogFile, err = os.OpenFile(
+		sbcInst.sbcData.DockerLogFileLocation,
+		os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		return nil, fmt.Errorf("could not create docker log file: %w", err)
 	}

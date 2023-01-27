@@ -59,6 +59,7 @@ func displaySBCInformation(sbcs []types.Sbc) {
 	}
 
 	buff.WriteString("[SBC INFORMATION]\n")
+
 	headerFmt := color.New(color.FgGreen, color.Underline).SprintfFunc()
 	columnFmt := color.New(color.FgYellow).SprintfFunc()
 
@@ -68,7 +69,7 @@ func displaySBCInformation(sbcs []types.Sbc) {
 
 	for _, sbcInfo := range sbcs {
 		tbl.AddRow(sbcInfo.SbcName, sbcInfo.SbcTLSPort, sbcInfo.SbcUDPPort, sbcInfo.PbxIP,
-			sbcInfo.PbxPort, sbcInfo.MediaPublicIP, sbcInfo.RtpMinPort, sbcInfo.RtpMaxPort)
+			sbcInfo.PbxPort, sbcInfo.MediaPublicIP, sbcInfo.RTPMinPort, sbcInfo.RTPMaxPort)
 	}
 
 	tbl.Print()

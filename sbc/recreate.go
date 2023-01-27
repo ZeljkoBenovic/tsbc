@@ -4,6 +4,7 @@ import "github.com/docker/docker/api/types"
 
 func (s *sbc) Recreate(fqdnName string) error {
 	var err error
+
 	s.logger.Info("Recreating cluster", "fqdn", fqdnName)
 
 	// get container ids from the fqdn

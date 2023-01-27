@@ -19,7 +19,7 @@ type ContainerName int
 
 const (
 	KamailioContainer ContainerName = iota
-	RtpEngineContainer
+	RTPEngineContainer
 	LetsEncryptContainer
 )
 
@@ -27,6 +27,7 @@ var ErrContainerNameNotSupported = errors.New("selected container type not suppo
 
 func (s *sbc) handleTLSCertificates() error {
 	s.logger.Debug("Checking if SBC TLS certificate is already created")
+
 	fqdnNames, err := s.db.GetAllFqdnNames()
 	if err != nil {
 		return fmt.Errorf("could not get fqdn names: %w", err)
@@ -98,8 +99,8 @@ func (s *sbc) createAndRunLetsEncrypt(fqdnNames []string) error {
 func (s *sbc) createAndRunSbcInfra() error {
 	// environment variables for RTP Engine container
 	rtpEngEnvVars := []string{
-		fmt.Sprintf("RTP_MAX=%s", s.sbcData.RtpMaxPort),
-		fmt.Sprintf("RTP_MIN=%s", s.sbcData.RtpMinPort),
+		fmt.Sprintf("RTP_MAX=%s", s.sbcData.RTPMaxPort),
+		fmt.Sprintf("RTP_MIN=%s", s.sbcData.RTPMinPort),
 		fmt.Sprintf("MEDIA_PUB_IP=%s", s.sbcData.MediaPublicIP),
 		fmt.Sprintf("NG_LISTEN=%s", s.sbcData.NgListen),
 	}
@@ -107,6 +108,7 @@ func (s *sbc) createAndRunSbcInfra() error {
 	fqdnNames, err := s.db.GetAllFqdnNames()
 	if err != nil {
 		s.logger.Error("Could not get the list of fqdn names")
+
 		return err
 	}
 
@@ -119,7 +121,7 @@ func (s *sbc) createAndRunSbcInfra() error {
 	// environment variables for Kamailio container
 	kamailioEnvVars := []string{
 		fmt.Sprintf("NEW_CONFIG=%t", s.sbcData.NewConfig),
-		fmt.Sprintf("EN_SIPDUMP=%t", s.sbcData.EnableSipDump),
+		fmt.Sprintf("EN_SIPDUMP=%t", s.sbcData.EnableSIPDump),
 		fmt.Sprintf("ADVERTISE_IP=%s", s.sbcData.SbcName),
 		fmt.Sprintf("ALIAS=%s", s.sbcData.SbcName),
 		fmt.Sprintf("SBC_NAME=%s", s.sbcData.SbcName),
@@ -130,10 +132,10 @@ func (s *sbc) createAndRunSbcInfra() error {
 		fmt.Sprintf("PBX_IP=%s", s.sbcData.PbxIP),
 		fmt.Sprintf("PBX_PORT=%s", s.sbcData.PbxPort),
 		fmt.Sprintf("RTP_ENG_IP=%s", viper.GetString(flagnames.HostIP)),
-		fmt.Sprintf("RTP_ENG_PORT=%s", s.sbcData.RtpEnginePort),
+		fmt.Sprintf("RTP_ENG_PORT=%s", s.sbcData.RTPEnginePort),
 	}
 
-	if err = s.createAndRunContainer(RtpEngineContainer, rtpEngEnvVars); err != nil {
+	if err = s.createAndRunContainer(RTPEngineContainer, rtpEngEnvVars); err != nil {
 		return fmt.Errorf("could not run rtp-engine container err=%w", err)
 	}
 
@@ -183,10 +185,10 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 		}
 		containerParams.dockerDefaultHostConfig.Mounts = append(
 			containerParams.dockerDefaultHostConfig.Mounts,
-			s.handleSipDumpVolume())
+			s.handleSIPDumpVolume())
 
-	case RtpEngineContainer:
-		containerParams.imageName = viper.GetString(flagnames.RtpImage)
+	case RTPEngineContainer:
+		containerParams.imageName = viper.GetString(flagnames.RTPImage)
 		containerParams.containerName = s.sbcData.SbcName + "-rtp-engine"
 		containerParams.dbTableName = "rtp_engine"
 		containerParams.rowID = s.db.GetRTPEngineInsertID(s.sbcData.SbcName)
@@ -265,18 +267,19 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 	return nil
 }
 
-// handleSipDumpVolume returns a bind mount or regular docker volume based on sip-dump flag
-func (s *sbc) handleSipDumpVolume() mount.Mount {
+// handleSIPDumpVolume returns a bind mount or regular docker volume based on sip-dump flag
+func (s *sbc) handleSIPDumpVolume() mount.Mount {
 	sipDumpMount := mount.Mount{
 		Type:   mount.TypeVolume,
 		Source: s.sbcData.SbcName + "-sipdump",
 		Target: "/tmp",
 	}
 
-	if s.sbcData.EnableSipDump {
+	if s.sbcData.EnableSIPDump {
 		currentDir, err := os.Getwd()
 		if err != nil {
 			s.logger.Debug("Could not get current working directory, setting path to /tmp")
+
 			currentDir = "/tmp"
 		}
 

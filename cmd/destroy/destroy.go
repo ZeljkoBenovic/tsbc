@@ -37,9 +37,9 @@ func GetCmd() *cobra.Command {
 	destroyCmd.Flags().String(flagnames.LogLevel, "info", "set log level")
 	destroyCmd.Flags().String(flagnames.DBFileLocation, "",
 		fmt.Sprintf("sqlite file location, file name must end with .db (default: %s)", db.DefaultDBLocation()))
-	destroyCmd.Flags().Bool(flagnames.DestroyTlsNode, false, "destroy LetsEncrypt instance")
+	destroyCmd.Flags().Bool(flagnames.DestroyTLSNode, false, "destroy LetsEncrypt instance")
 
-	destroyCmd.MarkFlagsMutuallyExclusive(flagnames.SbcFqdn, flagnames.DestroyTlsNode)
+	destroyCmd.MarkFlagsMutuallyExclusive(flagnames.SbcFqdn, flagnames.DestroyTLSNode)
 
 	// bind flags to viper
 	if err := viper.BindPFlag("destroy.fqdn", destroyCmd.Flag(flagnames.SbcFqdn)); err != nil {
@@ -54,7 +54,7 @@ func GetCmd() *cobra.Command {
 		log.Fatalln("Could not bind destroy.db-file:", err.Error())
 	}
 
-	if err := viper.BindPFlag("destroy.tls-node", destroyCmd.Flag(flagnames.DestroyTlsNode)); err != nil {
+	if err := viper.BindPFlag("destroy.tls-node", destroyCmd.Flag(flagnames.DestroyTLSNode)); err != nil {
 		log.Fatalln("Could not bind destroy.tls-node", err.Error())
 	}
 
@@ -78,8 +78,6 @@ func runCommandHandler(cmd *cobra.Command, _ []string) {
 		os.Exit(1)
 	}
 
-	defer sbcInst.Close()
-
 	// destroy LetsEncrypt instance only, if selected
 	if viper.GetBool("destroy.tls-node") {
 		if err = sbcInst.DestroyLetsEncryptNode(); err != nil {
@@ -95,8 +93,9 @@ func runCommandHandler(cmd *cobra.Command, _ []string) {
 		os.Exit(1)
 	}
 
+	defer sbcInst.Close()
+
 	if err = sbcInst.Destroy(sbcFqdn); err != nil {
 		hlog.Error("Could not destroy cluster", "fqdn")
 	}
-
 }

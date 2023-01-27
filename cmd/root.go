@@ -17,8 +17,9 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "tsbc",
 	Short: "TSBC connects your local PBX with MS Teams",
-	Long: `TSBC allows the interconnection between the internal PBX system, that is running on plain old SIP on UDP protocol 
-and the MS Teams VoIP platform, which uses SSIP (Secure SIP) on TCP/TLS protocol.`,
+	Long: "TSBC allows the interconnection between the internal PBX system," +
+		"that is running on plain old SIP on UDP protoco" +
+		"and the MS Teams VoIP platform, which uses SSIP (Secure SIP) on TCP/TLS protocol.",
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

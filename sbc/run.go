@@ -19,14 +19,14 @@ func (s *sbc) Run() {
 	}
 
 	// save sbc configuration information
-	sbcId, err := s.db.SaveSBCInformation()
+	sbcID, err := s.db.SaveSBCInformation()
 	if err != nil {
 		s.logger.Error("Could not save SBC information", "err", err)
 		os.Exit(1)
 	}
 
 	// get data from database
-	s.sbcData, err = s.db.GetSBCParameters(sbcId)
+	s.sbcData, err = s.db.GetSBCParameters(sbcID)
 	if err != nil {
 		s.logger.Error("Could not get SBC parameters", "err", err)
 		os.Exit(1)
@@ -89,6 +89,7 @@ func (s *sbc) setLogOutput() io.Writer {
 		// create log directory
 		if err = os.MkdirAll(filepath.Dir(s.sbcData.LogFileLocation), 755); err != nil && !os.IsExist(err) {
 			s.logger.Error("Could not create log directory, switching to console output", "err", err)
+
 			break
 		}
 
@@ -96,7 +97,9 @@ func (s *sbc) setLogOutput() io.Writer {
 		logOutput, err = os.OpenFile(s.sbcData.LogFileLocation, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 		if err != nil {
 			s.logger.Error("Could not create log file", "err", err)
+
 			logOutput = nil
+
 			break
 		}
 	}

@@ -20,7 +20,7 @@ type IDB interface {
 	SaveSBCInformation() (int64, error)
 	SaveContainerID(rowID int64, tableName, id string) error
 
-	GetSBCParameters(sbcId int64) (types.Sbc, error)
+	GetSBCParameters(sbcID int64) (types.Sbc, error)
 	GetSBCIdFromFqdn(sbcFqdn string) int64
 	GetKamailioInsertID(sbcFqdn string) int64
 	GetRTPEngineInsertID(sbcFqdn string) int64
@@ -30,13 +30,13 @@ type IDB interface {
 
 	RevertLastInsert()
 	RemoveSbcInfo(sbcFqdn string) error
-	RemoveLetsEncryptInfo(nodeId string) error
+	RemoveLetsEncryptInfo(nodeID string) error
 }
 
 var (
-	ErrPbxIpNotDefined             = errors.New("pbx ip address not defined")
+	ErrPbxIPNotDefined             = errors.New("pbx ip address not defined")
 	ErrSbcFqdnNotDefined           = errors.New("sbc fqdn not defined")
-	ErrRtpEnginePublicIPNotDefined = errors.New("rtp engine public ip address not defined")
+	ErrRTPEnginePublicIPNotDefined = errors.New("rtp engine public ip address not defined")
 )
 
 type db struct {
@@ -52,6 +52,7 @@ type insertID struct {
 
 func NewDB(logger hclog.Logger, dbLocation string) (IDB, error) {
 	var err error
+
 	dbInstance := &db{
 		log: logger.Named("db"),
 	}
@@ -151,13 +152,13 @@ func (d *db) GetLetsEncryptNodeID() (string, error) {
 	return *nodeID, nil
 }
 
-func (d *db) RemoveLetsEncryptInfo(nodeId string) error {
+func (d *db) RemoveLetsEncryptInfo(nodeID string) error {
 	stmt, err := d.db.Prepare("DELETE FROM letsencrypt WHERE container_id = ?")
 	if err != nil {
 		return fmt.Errorf("could not prepare delete letsencrypt node: %w", err)
 	}
 
-	_, err = stmt.Exec(nodeId)
+	_, err = stmt.Exec(nodeID)
 	if err != nil {
 		return fmt.Errorf("could not execute delete letsencrypt statement: %w", err)
 	}
@@ -184,19 +185,19 @@ func (d *db) RemoveSbcInfo(sbcFqdn string) error {
 		return fmt.Errorf("could not query select statement: %w", err)
 	}
 
-	sbcId := int64(0)
-	kamId := int64(0)
-	rtpId := int64(0)
+	sbcID := int64(0)
+	kamID := int64(0)
+	rtpID := int64(0)
 
 	for row.Next() {
-		if err = row.Scan(&sbcId, &kamId, &rtpId); err != nil {
+		if err = row.Scan(&sbcID, &kamID, &rtpID); err != nil {
 			return fmt.Errorf("could not scan ids into vars: %w", err)
 		}
 	}
 
-	d.deleteRowWithID("sbc_info", sbcId)
-	d.deleteRowWithID("kamailio", kamId)
-	d.deleteRowWithID("rtp_engine", rtpId)
+	d.deleteRowWithID("sbc_info", sbcID)
+	d.deleteRowWithID("kamailio", kamID)
+	d.deleteRowWithID("rtp_engine", rtpID)
 
 	d.log.Debug("Deleted sbc information from database", "sbc_fqdn", sbcFqdn)
 
@@ -210,7 +211,7 @@ func (d *db) GetContainerIDsFromSbcFqdn(sbcFqdn string) []string {
 			"JOIN kamailio k ON k.id = sbc_info.kamailio_id " +
 			"JOIN rtp_engine r ON sbc_info.rtp_engine_id = r.id " +
 			"WHERE sbc_info.fqdn = ?")
-	if err != err {
+	if err != nil {
 		d.log.Error("Could not prepare select statement", "err", err)
 
 		return nil
@@ -254,8 +255,9 @@ func (d *db) SaveSBCInformation() (int64, error) {
 	var err error
 
 	// check if required flags are present
-	if err := checkForRequiredFlags(); err != nil {
+	if err = checkForRequiredFlags(); err != nil {
 		d.log.Error("Required flags check failed", "err", err)
+
 		return -1, err
 	}
 
@@ -267,7 +269,7 @@ func (d *db) SaveSBCInformation() (int64, error) {
 	}
 
 	// store rtp engine config and save insert id
-	if err = d.storeRtpEngineData(); err != nil {
+	if err = d.storeRTPEngineData(); err != nil {
 		d.log.Error("Could not store rtp engine data", "err", err)
 
 		return -1, err
@@ -323,7 +325,7 @@ func (d *db) GetSBCIdFromFqdn(sbcFqdn string) int64 {
 	return sbcID
 }
 
-func (d *db) GetSBCParameters(sbcId int64) (types.Sbc, error) {
+func (d *db) GetSBCParameters(sbcID int64) (types.Sbc, error) {
 	stmt, err := d.db.Prepare(
 		"SELECT " +
 			"fqdn, sbc_name, sbc_tls_port, sbc_udp_port, " +
@@ -337,7 +339,7 @@ func (d *db) GetSBCParameters(sbcId int64) (types.Sbc, error) {
 		return types.Sbc{}, fmt.Errorf("could not prepare select statement err=%w", err)
 	}
 
-	res, err := stmt.Query(sbcId)
+	res, err := stmt.Query(sbcID)
 	if err != nil {
 		return types.Sbc{}, fmt.Errorf("could not run query for select statement err=%w", err)
 	}
@@ -352,17 +354,16 @@ func (d *db) GetSBCParameters(sbcId int64) (types.Sbc, error) {
 			&sbcResult.SbcUDPPort,
 			&sbcResult.PbxIP,
 			&sbcResult.PbxPort,
-			&sbcResult.RtpEnginePort,
-			&sbcResult.RtpMaxPort,
-			&sbcResult.RtpMinPort,
+			&sbcResult.RTPEnginePort,
+			&sbcResult.RTPMaxPort,
+			&sbcResult.RTPMinPort,
 			&sbcResult.MediaPublicIP,
 			&sbcResult.NgListen,
 			&sbcResult.NewConfig,
-			&sbcResult.EnableSipDump,
+			&sbcResult.EnableSIPDump,
 		); err != nil {
 			return types.Sbc{}, fmt.Errorf("could not scan data into struct err=%w", err)
 		}
-
 	}
 
 	d.log.Debug("Data fetched from database", "data", sbcResult)
@@ -370,7 +371,7 @@ func (d *db) GetSBCParameters(sbcId int64) (types.Sbc, error) {
 	return sbcResult, nil
 }
 
-func (d *db) storeRtpEngineData() error {
+func (d *db) storeRTPEngineData() error {
 	// select the last record in the table
 	rows, err := d.db.Query("SELECT * FROM rtp_engine ORDER BY id DESC LIMIT 1;")
 	if err != nil {
@@ -379,16 +380,16 @@ func (d *db) storeRtpEngineData() error {
 
 	var (
 		rtpMaxPort, rtpMinPort, rtpSignalPort string
-		rtpPubIP                              = viper.GetString(flagnames.RtpPublicIp)
+		rtpPubIP                              = viper.GetString(flagnames.RTPPublicIP)
 	)
 
 	// check if the table is empty
 	if !rows.Next() {
 		d.log.Debug("Rtp engine table is empty, using default first data")
 
-		rtpMaxPort = viper.GetString(flagnames.RtpMaxPort)
-		rtpMinPort = viper.GetString(flagnames.RtpMinPort)
-		rtpSignalPort = viper.GetString(flagnames.RtpSignalPort)
+		rtpMaxPort = viper.GetString(flagnames.RTPMaxPort)
+		rtpMinPort = viper.GetString(flagnames.RTPMinPort)
+		rtpSignalPort = viper.GetString(flagnames.RTPSignalPort)
 	} else {
 		rtpSignalPort = d.getSingleRecordAndIncreaseByValue(1, "ng_listen", "rtp_engine")
 		rtpMinPort = d.getSingleRecordAndIncreaseByValue(500, "rtp_min", "rtp_engine")
@@ -427,10 +428,10 @@ func (d *db) storeKamailioData() error {
 	// get Kamailio values from flags
 	var (
 		newConfig                       int
-		enableSipDump                   int
-		sbcPort, udpSipPort, rtpEngPort string
+		enableSIPDump                   int
+		sbcPort, udpSIPPort, rtpEngPort string
 		// user must always set these values and/or they don't have to be unique
-		pbxIP   = viper.GetString(flagnames.KamailioPbxIp)
+		pbxIP   = viper.GetString(flagnames.KamailioPbxIP)
 		pbxPort = viper.GetString(flagnames.KamailioPbxPort)
 		sbcFqdn = viper.GetString(flagnames.SbcFqdn)
 	)
@@ -440,8 +441,8 @@ func (d *db) storeKamailioData() error {
 		newConfig = 1
 	}
 
-	if viper.GetBool(flagnames.KamailioSipDump) {
-		enableSipDump = 1
+	if viper.GetBool(flagnames.KamailioSIPDump) {
+		enableSIPDump = 1
 	}
 
 	// select the last record in the table
@@ -455,15 +456,15 @@ func (d *db) storeKamailioData() error {
 		d.log.Debug("Kamailio table is empty, using default first data")
 
 		// if there are no records in the table, default values will be used
-		rtpEngPort = viper.GetString(flagnames.KamailioRtpEngPort)
+		rtpEngPort = viper.GetString(flagnames.KamailioRTPEngPort)
 		sbcPort = viper.GetString(flagnames.KamailioSbcPort)
-		udpSipPort = viper.GetString(flagnames.KamailioUdpSipPort)
+		udpSIPPort = viper.GetString(flagnames.KamailioUDPSIPPort)
 	} else {
 		d.log.Debug("Existing Kamailio data found, calculating next values")
 
 		// if there are some records, next values will be calculated
 		rtpEngPort = d.getSingleRecordAndIncreaseByValue(1, "rtp_engine_port", "kamailio")
-		udpSipPort = d.getSingleRecordAndIncreaseByValue(1, "sbc_udp_port", "kamailio")
+		udpSIPPort = d.getSingleRecordAndIncreaseByValue(1, "sbc_udp_port", "kamailio")
 		sbcPort = d.getSingleRecordAndIncreaseByValue(1, "sbc_tls_port", "kamailio")
 	}
 
@@ -471,7 +472,8 @@ func (d *db) storeKamailioData() error {
 
 	// prepare statement
 	stmt, err := d.db.Prepare(
-		"INSERT INTO kamailio(new_config, enable_sipdump, pbx_ip, pbx_port, rtp_engine_port, sbc_name, sbc_tls_port, sbc_udp_port) " +
+		"INSERT INTO kamailio(new_config, enable_sipdump, pbx_ip, " +
+			"pbx_port, rtp_engine_port, sbc_name, sbc_tls_port, sbc_udp_port) " +
 			"VALUES (?,?,?,?,?,?,?,?);")
 	if err != nil {
 		return fmt.Errorf("could not prepare insert statement err=%w", err)
@@ -480,13 +482,13 @@ func (d *db) storeKamailioData() error {
 	// pass flag values and execute
 	res, err := stmt.Exec(
 		newConfig,
-		enableSipDump,
+		enableSIPDump,
 		pbxIP,
 		pbxPort,
 		rtpEngPort,
 		sbcFqdn,
 		sbcPort,
-		udpSipPort,
+		udpSIPPort,
 	)
 	if err != nil {
 		return fmt.Errorf("could not execute insert statement err=%w", err)
