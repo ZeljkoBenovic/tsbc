@@ -16,7 +16,7 @@ tsbc destroy --tls-node
 ### Options
 
 ```
-      --db-file string     sqlite file location, file name must end with .db (default: C:\Users\Sakal/.tsbc/sbc.db)
+      --db-file string     sqlite file location, file name must end with .db (default: ~/.tsbc/sbc.db)
   -h, --help               help for destroy
       --log-level string   set log level (default "info")
       --sbc-fqdn string    SBC FQDN to destroy
