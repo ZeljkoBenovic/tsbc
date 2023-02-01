@@ -15,6 +15,8 @@ TSBC connects your local PBX (any SIP compatible PBX) with MS Teams voice platfo
 It sits between MS Teams and local PBX, translating SIP/RTP traffic. On MS Teams side SSIP/TLS and on the 
 other, local, SIP/UDP traffic.
 
+![diagram](docs/diagram.png)
+
 ## Prerequisites
 
 * Docker `>= 20.10.17`
