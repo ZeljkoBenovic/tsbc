@@ -12,6 +12,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/strslice"
 	"github.com/spf13/viper"
 )
 
@@ -40,6 +41,70 @@ func (s *sbc) handleTLSCertificates() error {
 	return nil
 }
 
+func (s *sbc) stopAllContainersAndRemoveOldTLSCertificate() error {
+	allContainers, err := s.dockerCl.ContainerList(s.ctx, types.ContainerListOptions{All: true})
+	if err != nil {
+		s.logger.Error("Could not list all containers", "err", err)
+
+		return err
+	}
+
+	le, err := s.db.GetLetsEncryptNodeID()
+	if err != nil {
+		s.logger.Error("Could not get letsencrypt node id", "err", err)
+
+		return err
+	}
+
+	execID, err := s.dockerCl.ContainerExecCreate(s.ctx, le, types.ExecConfig{
+		AttachStderr: true,
+		AttachStdout: true,
+		Cmd:          []string{"/bin/bash", "-c", "rm -rf /config"},
+	})
+	if err != nil {
+		s.logger.Error("Could not create exec command", "err", err)
+
+		return err
+	}
+
+	s.logger.Info("Removing existing certificates...")
+
+	resp, err := s.dockerCl.ContainerExecAttach(s.ctx, execID.ID, types.ExecStartCheck{})
+	if err != nil {
+		s.logger.Error("Could not get exec response", "err", err)
+
+		return err
+	}
+
+	defer resp.Close()
+
+	data, _ := io.ReadAll(resp.Reader)
+	s.logger.Debug("Docker exec result", "result", string(data))
+
+	for _, id := range allContainers {
+		if err := s.dockerCl.ContainerStop(s.ctx, id.ID, nil); err != nil {
+			s.logger.Error("Could not stop container", "id", id)
+
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *sbc) startAllContainers() {
+	allContainers, err := s.dockerCl.ContainerList(s.ctx, types.ContainerListOptions{All: true})
+	if err != nil {
+		s.logger.Error("Could not list all containers", "err", err)
+	}
+
+	for _, id := range allContainers {
+		if err = s.dockerCl.ContainerStart(s.ctx, id.ID, types.ContainerStartOptions{}); err != nil {
+			s.logger.Error("Could not start container", "id", id)
+		}
+	}
+}
+
 func (s *sbc) removeLetsEncryptNode() error {
 	nodeID, err := s.db.GetLetsEncryptNodeID()
 	if err != nil {
@@ -47,6 +112,11 @@ func (s *sbc) removeLetsEncryptNode() error {
 	}
 
 	if nodeID != "" {
+		// stop all containers
+		if err = s.stopAllContainersAndRemoveOldTLSCertificate(); err != nil {
+			return err
+		}
+
 		// remove container
 		if err = s.dockerCl.ContainerRemove(s.ctx, nodeID, types.ContainerRemoveOptions{
 			Force:         true,
@@ -92,6 +162,8 @@ func (s *sbc) createAndRunLetsEncrypt(fqdnNames []string) error {
 	if err := s.createAndRunContainer(LetsEncryptContainer, envVars); err != nil {
 		return err
 	}
+
+	s.startAllContainers()
 
 	return nil
 }
@@ -214,6 +286,7 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 				Target: "/config/etc/letsencrypt",
 			},
 		}
+		containerParams.dockerDefaultHostConfig.CapAdd = strslice.StrSlice{"NET_ADMIN"}
 
 	default:
 		return ErrContainerNameNotSupported
@@ -228,7 +301,7 @@ func (s *sbc) createAndRunContainer(contName ContainerName, envVars []string) er
 
 	defer reader.Close()
 	// output logs to log file
-	_, err = io.Copy(s.dockerLogFile, reader)
+	_, _ = io.Copy(s.dockerLogFile, reader)
 
 	resp, err := s.dockerCl.ContainerCreate(s.ctx, &container.Config{
 		Image: containerParams.imageName,

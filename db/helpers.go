@@ -118,9 +118,10 @@ func (d *db) deleteRowWithID(tableName string, insertID int64) {
 func (d *db) insertOrUpdateContainerID(rowID int64, tableName, containerID string) (sql.Result, error) {
 	var (
 		tableID = new(int64)
-		stmt    = new(sql.Stmt)
-		result  sql.Result
-		err     error
+		//nolint:wastedassign
+		stmt   = new(sql.Stmt)
+		result sql.Result
+		err    error
 	)
 	// check if this rowID exists in the database
 	err = d.db.QueryRowContext(
