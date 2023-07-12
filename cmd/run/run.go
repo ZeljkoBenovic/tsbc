@@ -37,7 +37,7 @@ func GetCmd() *cobra.Command {
 	runCmd.Flags().String(flagnames.KamailioPbxIP, "", "ip address of internal PBX")
 	runCmd.Flags().String(flagnames.KamailioPbxPort, "5060", "sip port of internal PBX")
 	runCmd.Flags().String(flagnames.KamailioRTPEngPort, "20001", "rtp engine signalisation port")
-	runCmd.Flags().String(flagnames.KamailioImage, "zeljkoiphouse/kamailio:v0.2", "kamailio docker image name")
+	runCmd.Flags().String(flagnames.KamailioImage, "ghcr.io/zeljkobenovic/kamailio:latest", "kamailio docker image name")
 	// rtp engine flags
 	runCmd.Flags().String(flagnames.RTPMinPort, "20501", "start port for RTP")
 	runCmd.Flags().String(flagnames.RTPMaxPort, "21000", "end port for RTP")

@@ -185,10 +185,7 @@ func (s *sbc) createAndRunSbcInfra() error {
 	}
 
 	// the first fqdn name will always be the folder for all certificates
-	certFolderName := s.sbcData.SbcName
-	if len(fqdnNames) > 1 {
-		certFolderName = fqdnNames[0]
-	}
+	certFolderName := fqdnNames[0]
 
 	// environment variables for Kamailio container
 	kamailioEnvVars := []string{
