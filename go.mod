@@ -3,7 +3,7 @@ module github.com/ZeljkoBenovic/tsbc
 go 1.19
 
 require (
-	github.com/docker/docker v20.10.22+incompatible
+	github.com/docker/docker v20.10.27+incompatible
 	github.com/fatih/color v1.14.1
 	github.com/hashicorp/go-hclog v1.4.0
 	github.com/mattn/go-sqlite3 v1.14.16
