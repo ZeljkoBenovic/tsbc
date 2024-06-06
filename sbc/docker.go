@@ -196,10 +196,12 @@ func (s *sbc) createAndRunSbcInfra() error {
 		fmt.Sprintf("SBC_NAME=%s", s.sbcData.SbcName),
 		fmt.Sprintf("CERT_FOLDER_NAME=%s", certFolderName),
 		fmt.Sprintf("SBC_PORT=%s", s.sbcData.SbcTLSPort),
+		// TODO: store this in the DB and fetch it from there
 		fmt.Sprintf("HOST_IP=%s", viper.GetString(flagnames.HostIP)),
 		fmt.Sprintf("UDP_SIP_PORT=%s", s.sbcData.SbcUDPPort),
 		fmt.Sprintf("PBX_IP=%s", s.sbcData.PbxIP),
 		fmt.Sprintf("PBX_PORT=%s", s.sbcData.PbxPort),
+		// TODO: store this in the DB and fetch it from there
 		fmt.Sprintf("RTP_ENG_IP=%s", viper.GetString(flagnames.HostIP)),
 		fmt.Sprintf("RTP_ENG_PORT=%s", s.sbcData.RTPEnginePort),
 	}
