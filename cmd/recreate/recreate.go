@@ -20,6 +20,7 @@ var recreateCmd = &cobra.Command{
 func GetCmd() *cobra.Command {
 	recreateCmd.Flags().String(flagnames.SbcFqdn, "", "fqdn of the sbc cluster to restart")
 	recreateCmd.Flags().String(flagnames.LogLevel, "info", "set log level")
+	recreateCmd.Flags().String(flagnames.HostIP, "", "the static lan ip address of the docker host")
 
 	_ = recreateCmd.MarkFlagRequired(flagnames.SbcFqdn)
 
